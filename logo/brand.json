@@ -1,0 +1,13 @@
+{
+  "slug": "cookbookforge",
+  "title": "CookbookForge",
+  "hex": "#D97706",
+  "sizes": [16, 24, 32, 48, 64, 128, 180, 256, 512],
+  "generated_by": "logo-svg-generator skill",
+  "concept": "An open book (two pages meeting at a central 0.5-unit spine gap) with a four-pointed forge spark rising from the spine — 'forging' source material into multi-format cookbooks (LaTeX/PDF/EPUB/Nextra).",
+  "metaphor": ["open book", "forge spark / four-pointed star"],
+  "shape_family": "pictogram + geometric",
+  "canvas": "24x24 single path, Simple Icons compliant",
+  "review_iterations": 3,
+  "notes": "Monochrome master; brand-color (#D97706 amber) variant in color/ and color-png/. PNGs rendered via Pillow (cairo unavailable at build time)."
+}
