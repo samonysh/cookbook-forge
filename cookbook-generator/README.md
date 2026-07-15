@@ -73,7 +73,20 @@ cookbook-generator/
     └── stylesheet.formula-image.css      # 公式图片型 EPUB CSS
 ```
 
+## 组件架构
+
+![cookbook-generator 组件架构](assets/diagrams/architecture-cn.svg)
+
+## 用例图
+
+![cookbook-generator 用例图](assets/diagrams/usecase-cn.svg)
+
 ## 工作流程概览
+
+![cookbook-generator 工作流程](assets/diagrams/workflow-cn.svg)
+
+<details>
+<summary>文字版流程</summary>
 
 ```
 阶段 0  输入识别     → 主题/资料/读者/字数/格式/图表偏好
@@ -88,6 +101,8 @@ cookbook-generator/
   5d.  EPUB         → 字体子集化 + CSS 重写 + Python 打包
 阶段 6  最终交付     → 中英文 README + 链接 + 统计报告
 ```
+
+</details>
 
 ## 依赖的 Skills / 工具
 

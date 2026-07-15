@@ -73,7 +73,20 @@ cookbook-generator/
     └── stylesheet.formula-image.css      # CSS for formula-as-image EPUBs
 ```
 
+## Component Architecture
+
+![cookbook-generator Component Architecture](assets/diagrams/architecture-en.svg)
+
+## Use Case Diagram
+
+![cookbook-generator Use Case Diagram](assets/diagrams/usecase-en.svg)
+
 ## Workflow Overview
+
+![cookbook-generator Workflow](assets/diagrams/workflow-en.svg)
+
+<details>
+<summary>Textual workflow</summary>
 
 ```
 Phase 0  Input gathering  → topic / sources / audience / word count / formats / diagram tools
@@ -88,6 +101,8 @@ Phase 5  Format conversion
   5d.  EPUB              → font subsetting + CSS rewrite + Python packaging
 Phase 6  Delivery         → bilingual README + links + statistics report
 ```
+
+</details>
 
 ## Dependent Skills / Tools
 
