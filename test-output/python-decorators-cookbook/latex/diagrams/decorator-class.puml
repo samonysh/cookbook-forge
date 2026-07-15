@@ -1,0 +1,40 @@
+@startuml
+skinparam monochrome true
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "WenQuanYi Micro Hei"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam ArrowColor #000000
+skinparam DefaultTextColor #000000
+skinparam NoteBackgroundColor #FFFFFF
+
+title 图 2-1：装饰器类层次
+
+abstract class BaseDecorator {
+  + {abstract} __call__()
+}
+class RetryDecorator {
+  - times: int
+  - func: Callable
+  + __call__(*args, **kwargs)
+}
+class SingletonDecorator {
+  - cls: type
+  - _instance: object
+  + __call__(*args, **kwargs)
+}
+class FunctionWrapper {
+  - wraps: Callable
+  + __get__(instance, owner)
+}
+
+BaseDecorator <|-- RetryDecorator
+BaseDecorator <|-- SingletonDecorator
+SingletonDecorator *-- FunctionWrapper : __wrapped__
+
+note right of RetryDecorator
+  参数化装饰器：
+  @retry(times=3)
+end note
+@enduml

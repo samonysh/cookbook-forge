@@ -1,0 +1,20 @@
+# Word Count Report
+
+Generated: 2026-07-15T11:31:18.639Z
+Total CJK characters: 2056
+Total English words: 406
+Estimated total word count: 2462
+Chapters: 4
+Recipes: 2
+Tables: 10
+Code blocks: 17
+Figures/images: 2
+
+## Per-chapter breakdown
+
+| File | CJK | EN | Est. words |
+|---|---|---|---|
+| appendix-a.mdx | 151 | 51 | 202 |
+| ch01-basics.mdx | 722 | 153 | 875 |
+| ch02-advanced.mdx | 839 | 150 | 989 |
+| index.mdx | 344 | 52 | 396 |

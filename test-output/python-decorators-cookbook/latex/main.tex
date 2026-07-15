@@ -1,0 +1,70 @@
+\documentclass[12pt,a4paper]{elegantbook}
+\title{CookBook}
+\subtitle{}
+\author{Cookbook Generator}
+\institute{}
+\date{\today}
+\version{1.0}
+
+% 数学 / 字体 / 中文
+\usepackage{amsmath,amssymb}
+\usepackage{fontspec}
+
+% 表格
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xltabular}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{makecell}
+\usepackage{multirow}
+\usepackage{threeparttable}
+\usepackage{pdflscape}
+\usepackage{needspace}
+\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{5pt}
+
+% 代码块
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\lstdefinestyle{cookbookcode}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  breakatwhitespace=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  frame=none,
+  tabsize=2,
+  extendedchars=true,
+  literate={-}{{-}}1
+}
+\newtcblisting{codeblock}[2][]{
+  listing only,
+  listing style=cookbookcode,
+  title={#2},
+  breakable,
+  enhanced,
+  colback=gray!3,
+  colframe=gray!45,
+  boxrule=0.4pt,
+  arc=2mm,
+  left=1.5mm, right=1.5mm, top=1mm, bottom=1mm,
+  fonttitle=\bfseries\small,
+  #1
+}
+
+% 超链接
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\input{chapters/appendix-a}
+\input{chapters/ch01-basics}
+\input{chapters/ch02-advanced}
+\input{chapters/index}
+
+\end{document}

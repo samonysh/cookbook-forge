@@ -1,0 +1,56 @@
+% Auto-generated from appendix-a.mdx — edit appendix-a.mdx then re-run mdx2tex.mjs
+\chapter{附录 A · functools 常用装饰器速查}
+\label{ch:appendix-a}
+
+\section*{附录 A · functools 常用装饰器速查}
+Python 标准库 \textbackslash\{\}texttt\{functools\} 提供了几个常用装饰器/工具，自己写装饰器时几乎都会用到。
+
+\section{速查表}
+\begin{table}[htbp]
+\centering
+\begin{tabularx}{\textwidth}{X X X}
+\toprule
+装饰器 / 函数 & 用途 & 典型写法 \\
+\midrule
+\textbackslash\{\}texttt\{@functools.wraps(func)\} & 拷贝原函数 \textbackslash\{\}texttt\{\_\_name\_\_\}/\textbackslash\{\}texttt\{\_\_doc\_\_\} & wrapper 定义处加上 \\
+\textbackslash\{\}texttt\{@functools.lru\_cache(maxsize=N)\} & 记忆化（LRU 缓存） & 递归、纯函数 \\
+\textbackslash\{\}texttt\{@functools.cache\} & Python 3.9+，等价无上限 LRU & 递归、纯函数 \\
+\textbackslash\{\}texttt\{@functools.singledispatch\} & 按第一个参数类型分派（泛函数） & 多态工具函数 \\
+\textbackslash\{\}texttt\{@functools.total\_ordering\} & 补全比较运算符 & 只写 \textbackslash\{\}texttt\{\_\_eq\_\_\}+\textbackslash\{\}texttt\{\_\_lt\_\_\} 即可 \\
+\textbackslash\{\}texttt\{functools.partial(fn, *args)\} & 偏函数：冻结部分参数 & 回调、工厂 \\
+\textbackslash\{\}texttt\{functools.reduce(fn, iter)\} & 累积归约 & 替代简单 for-累加 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{使用示例}
+
+\begin{codeblock}{python}
+# file: examples/functools_demo.py
+import functools
+
+@functools.lru_cache(maxsize=128)
+def fib(n: int) -> int:
+    """记忆化斐波那契，复杂度从 O(2^n) 降到 O(n)。"""
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+print(fib(40))  # 瞬间出结果；没有 lru_cache 要算很久
+
+@functools.total_ordering
+class Version:
+    def __init__(self, major: int, minor: int):
+        self.major, self.minor = major, minor
+    def __eq__(self, other): return (self.major, self.minor) == (other.major, other.minor)
+    def __lt__(self, other): return (self.major, self.minor) < (other.major, other.minor)
+    # 有了 total_ordering，>=、<=、> 自动生成
+
+print(Version(1, 2) <= Version(1, 10))  # True
+\end{codeblock}
+
+\section{延伸阅读}
+\begin{itemize}
+\item Python 官方文档：https://docs.python.org/3/library/functools.html
+\item Recipe 2-1 用到 \textbackslash\{\}texttt\{functools.wraps\}：见 第 2 章 §2.2
+\end{itemize}

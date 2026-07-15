@@ -1,0 +1,234 @@
+% Auto-generated from ch02-advanced.mdx — edit ch02-advanced.mdx then re-run mdx2tex.mjs
+\chapter{第 2 章 参数化装饰器与类装饰器}
+\label{ch:ch02-advanced}
+
+\begin{tcolorbox}[colback=blue!5,colframe=blue!40,title={📘 本章地图}]
+第 1 章的装饰器只能"裸用"（\textbackslash\{\}textbackslash\textbackslash\{\}\{\textbackslash\{\}\}texttt\textbackslash\{\}\{@log\textbackslash\{\}\}）。本章学会带参数的装饰器、装饰类的装饰器，以及多个装饰器堆叠时的执行顺序。
+
+\begin{itemize}
+\item 2.1 带参装饰器：为什么多一层函数 - 2.2 Recipe：@retry(times=N) - 2.3 类装饰器：装饰整个类 - 2.4 装饰器堆叠：自下而上应用 - 2.5 常见陷阱 - 2.6 要点总结
+\end{itemize}
+\end{tcolorbox}
+\section{2.1 带参装饰器：为什么多一层函数}
+第 1 章的 \textbackslash\{\}texttt\{@log\} 写死了行为。如果想 \textbackslash\{\}texttt\{@retry(times=3)\} 这样\textbackslash\{\}textbf\{带参数\}，必须多包一层函数：
+
+
+\begin{codeblock}{python}
+# 不带参：@deco           → deco(func) 返回 wrapper
+# 带参：  @deco(times=3)  → deco(times=3)(func) 返回 wrapper
+\end{codeblock}
+
+也就是说，带参装饰器是\textbackslash\{\}textbf\{返回真正装饰器的工厂\}。通用模板：
+
+
+\begin{codeblock}{python}
+def deco_factory(params):
+    """外层：接收装饰器参数，返回真正的装饰器。"""
+    def real_decorator(func):
+        """中层：真正的装饰器，输入 func，输出 wrapper。"""
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            """内层：被装饰后的函数。"""
+            ...  # 可以使用 params、func
+        return wrapper
+    return real_decorator
+\end{codeblock}
+
+函数嵌套三层，理解关键是：\textbackslash\{\}textbf\{每次 \textbackslash\{\}texttt\{@deco(...)\} 先执行 \textbackslash\{\}texttt\{deco(...)\}，把结果当装饰器用。\}
+
+\section{2.2 Recipe：@retry(times=N)}
+<div className="callout recipe">
+
+\subsubsection{🍳 Recipe 2-1：失败自动重试}
+\textbackslash\{\}textbf\{Problem\}：调用不稳定的外部 API 时，想自动重试 N 次再放弃。
+
+\textbackslash\{\}textbf\{Solution\}：
+
+
+\begin{codeblock}{python}
+# file: recipes/retry.py
+import time
+import functools
+
+def retry(times: int = 3, delay: float = 0.5):
+    """失败重试装饰器。
+
+    Args:
+        times: 最大重试次数（含首次调用）。
+        delay: 每次重试前等待的秒数，避免雪崩。
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exc = None
+            for attempt in range(1, times + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as exc:
+                    last_exc = exc
+                    print(f"[retry] 第 {attempt}/{times} 次失败：{exc}")
+                    if attempt < times:
+                        time.sleep(delay)  # 退避等待
+            # 全部失败，向外抛出最后一次异常
+            raise last_exc
+        return wrapper
+    return decorator
+
+import random
+
+@retry(times=3, delay=0.1)
+def flaky_api() -> str:
+    if random.random() < 0.7:
+        raise ConnectionError("网络抖动")
+    return "ok"
+
+print(flaky_api())
+\end{codeblock}
+
+\textbackslash\{\}textbf\{Discussion\}：
+
+\begin{itemize}
+\item 三层嵌套对应 \textbackslash\{\}texttt\{retry(times=3)(func)(args)\}。
+\item 用 \textbackslash\{\}texttt\{time.sleep(delay)\} 做简单退避；生产环境建议\textbackslash\{\}textbf\{指数退避\}（exponential backoff）。
+\item 最后一次重试失败才 \textbackslash\{\}texttt\{raise\}，中间失败只打印日志。
+\end{itemize}
+</div>
+
+\section{2.3 类装饰器：装饰整个类}
+装饰器不仅能装饰函数，也能装饰\textbackslash\{\}textbf\{类\}。最常见的用途：
+
+\begin{itemize}
+\item 给类自动注册到某个全局表（如 ORM 模型、插件系统）
+\item 把类改造为单例（singleton）
+\item 自动给类加方法/属性
+\end{itemize}
+
+\begin{codeblock}{python}
+# file: examples/singleton.py
+import functools
+
+def singleton(cls):
+    """把类改造成单例：cls() 永远返回同一个实例。"""
+    _instances = {}
+
+    @functools.wraps(cls, updated=())
+    def wrapper(*args, **kwargs):
+        if cls not in _instances:
+            _instances[cls] = cls(*args, **kwargs)
+        return _instances[cls]
+
+    return wrapper
+
+@singleton
+class AppConfig:
+    def __init__(self):
+        self.env = "production"
+
+a = AppConfig()
+b = AppConfig()
+assert a is b  # True，同一个实例
+\end{codeblock}
+
+图 2-1 展示了装饰器相关类之间的继承与组合关系：
+
+\textbackslash\{\}begin\{figure\}[htbp]\textbackslash\{\}centering\textbackslash\{\}includegraphics[width=0.85\textbackslash\{\}textwidth]\{figures/decorator-class.svg\}\textbackslash\{\}caption\{图 2-1：装饰器类层次\}\textbackslash\{\}end\{figure\}
+
+注意：类装饰器接收的参数是 \textbackslash\{\}textbf\{类对象本身\}（而不是类的某个实例）。
+
+\section{2.4 装饰器堆叠：自下而上应用}
+多个装饰器可以堆叠在同一个函数上：
+
+
+\begin{codeblock}{python}
+@timer
+@retry(times=3)
+@log
+def fetch(url): ...
+\end{codeblock}
+
+\textbackslash\{\}textbf\{执行顺序\}规则只有一句话：\textbackslash\{\}textbf\{离函数最近的装饰器最先应用（自下而上）\}。
+
+上面的例子等价于：
+
+
+\begin{codeblock}{python}
+fetch = timer(retry(times=3)(log(fetch)))
+\end{codeblock}
+
+应用顺序是 \textbackslash\{\}texttt\{log → retry → timer\}；而\textbackslash\{\}textbf\{执行顺序\}（调用 \textbackslash\{\}texttt\{fetch()\} 时 wrapper 的堆叠顺序）正好相反：\textbackslash\{\}texttt\{timer → retry → log → 原 fetch\}。
+
+记忆法：\textbackslash\{\}textbf\{装饰像洋葱，外到内层层包裹\}。
+
+\subsection{装饰器类型速查}
+\begin{table}[htbp]
+\centering
+\begin{tabularx}{\textwidth}{X X X X}
+\toprule
+类型 & 语法 & 层数 & 典型场景 \\
+\midrule
+无参函数装饰器 & \textbackslash\{\}texttt\{@deco\} & 2 层 & \textbackslash\{\}texttt\{@log\}, \textbackslash\{\}texttt\{@timer\} \\
+带参函数装饰器 & \textbackslash\{\}texttt\{@deco(x=1)\} & 3 层 & \textbackslash\{\}texttt\{@retry(times=3)\}, \textbackslash\{\}texttt\{@lru\_cache(maxsize=64)\} \\
+类装饰器 & \textbackslash\{\}texttt\{@deco\} 在 \textbackslash\{\}texttt\{class\} 上 & 2 层 & \textbackslash\{\}texttt\{@singleton\}, \textbackslash\{\}texttt\{@dataclass\} \\
+堆叠装饰器 & 多个 \textbackslash\{\}texttt\{@\} & 多套 & 组合日志+重试+计时 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{2.5 常见陷阱}
+<div className="callout pitfall">
+
+\subsubsection{⚠️ 陷阱 2：装饰器堆叠顺序写反导致行为错乱}
+
+\begin{codeblock}{python}
+@log        # 外层
+@retry(3)   # 内层
+def api(): ...
+\end{codeblock}
+
+如果你期望"每次重试都打日志"，这个顺序是对的（外层 log 包裹整个 retry 循环，只会打一次）。如果你期望"每次尝试都打日志"，必须把 \textbackslash\{\}texttt\{@log\} 写在 \textbackslash\{\}texttt\{@retry\} \textbackslash\{\}textbf\{里面\}：
+
+
+\begin{codeblock}{python}
+@retry(3)
+@log
+def api(): ...
+\end{codeblock}
+
+\textbackslash\{\}textbf\{规则\}：想让某个 wrapper 对"每次重试"生效，就让它更靠近被装饰函数。
+
+\subsubsection{⚠️ 陷阱 3：类装饰器忘记保留类元信息}
+装饰类时 \textbackslash\{\}texttt\{functools.wraps(cls)\} 默认不会复制类的 \textbackslash\{\}texttt\{\_\_doc\_\_\}/\textbackslash\{\}texttt\{\_\_name\_\_\}，需要加 \textbackslash\{\}texttt\{updated=()\} 参数：
+
+
+\begin{codeblock}{python}
+@functools.wraps(cls, updated=())
+def wrapper(*args, **kwargs): ...
+\end{codeblock}
+
+</div>
+
+\section{2.6 要点总结}
+\begin{tcolorbox}[colback=green!5,colframe=green!40,title={✅ 核心要点}]
+\begin{itemize}
+\item 带参装饰器 = "返回装饰器的工厂"，\textbackslash\{\}textbackslash\textbackslash\{\}\{\textbackslash\{\}\}textbf\textbackslash\{\}\{三层嵌套\textbackslash\{\}\}：工厂 → 装饰器 → wrapper。 - 类装饰器接收\textbackslash\{\}textbackslash\textbackslash\{\}\{\textbackslash\{\}\}textbf\textbackslash\{\}\{类对象\textbackslash\{\}\}，常见用途是单例、注册、改造类。 - 多个装饰器堆叠：\textbackslash\{\}textbackslash\textbackslash\{\}\{\textbackslash\{\}\}textbf\textbackslash\{\}\{自下而上\textbackslash\{\}\}应用（离函数最近最先执行装饰），运行时\textbackslash\{\}textbackslash\textbackslash\{\}\{\textbackslash\{\}\}textbf\textbackslash\{\}\{外→内\textbackslash\{\}\}包裹。 - 用 \textbackslash\{\}textbackslash\textbackslash\{\}\{\textbackslash\{\}\}texttt\textbackslash\{\}\{functools.wraps\textbackslash\{\}\} 保留元信息；装饰类时加 \textbackslash\{\}textbackslash\textbackslash\{\}\{\textbackslash\{\}\}texttt\textbackslash\{\}\{updated=()\textbackslash\{\}\}。
+\end{itemize}
+\end{tcolorbox}
+行内公式示例：装饰器的数学抽象是 \$T: f \textbackslash\{\}mapsto f'\$，其中 \$f'\$ 是 wrapper。
+
+块级公式示例：带参装饰器的三次调用可以写成：
+
+\textbackslash\{\}[ D(a, b)(f)(x) = W\_\{a,b\}\textbackslash\{\}bigl(f(x)\textbackslash\{\}bigr) \textbackslash\{\}]
+
+\section{2.7 延伸阅读}
+\begin{itemize}
+\item 第 1 章 · 装饰器基础
+\item 附录 A · functools 速查
+\item Python 官方文档 \textbackslash\{\}texttt\{functools\}：https://docs.python.org/3/library/functools.html
+\end{itemize}
+---
+
+\textbackslash\{\}textbf\{本章参考文献\}
+
+\begin{enumerate}
+\item Python Software Foundation. "functools — Higher-order functions and operations on callable objects." https://docs.python.org/3/library/functools.html
+\end{enumerate}
