@@ -1,0 +1,74 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontColor #000000
+skinparam NoteBackgroundColor #FFFFFF
+skinparam NoteBorderColor #000000
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #000000
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #000000
+skinparam ArrowColor #000000
+skinparam ArrowThickness 0.75
+skinparam ActivityRoundCorner 10
+
+title cookbook-forge Workflow
+
+start
+:Phase 0 Input gathering;
+note right
+  topic / sources / audience
+  word count / formats / diagram tools
+end note
+:Phase 1 Research;
+note right
+  URLs / GitHub / arxiv /
+  PDF / EPUB / local / web
+  -> metadata/sources.md
+end note
+repeat
+  :Phase 2 Outline design;
+  note right
+    big picture + TOC
+    -> metadata/outline.md
+  end note
+repeat while (User approves outline?) is (no) not (yes)
+:Phase 3 Chapter MDX;
+note right
+  one .mdx per chapter:
+  intro / map / theory / practice
+  Recipes / pitfalls / key points / see-also
+end note
+while (Word count not met?) is (yes)
+  :Expand Recipes / source analysis;
+  :Lookup tables / appendices;
+endwhile (no)
+:Phase 5 Format conversion;
+fork
+  :5a. MDX source;
+fork again
+  :5b. ElegantBook LaTeX;
+  note right
+    xelatex two passes -> PDF
+  end note
+fork again
+  :5c. Nextra site;
+  note right
+    npm run build
+    + Docker verification
+  end note
+fork again
+  :5d. EPUB;
+  note right
+    font subsetting + CSS rewrite
+    + Python packaging
+  end note
+end fork
+:Phase 6 Delivery;
+note right
+  bilingual README
+  + links + statistics report
+end note
+stop
+@enduml

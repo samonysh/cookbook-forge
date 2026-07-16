@@ -1,0 +1,54 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontColor #000000
+skinparam defaultFontName "WenQuanYi Micro Hei"
+skinparam ActorBackgroundColor #FFFFFF
+skinparam ActorBorderColor #000000
+skinparam UsecaseBackgroundColor #FFFFFF
+skinparam UsecaseBorderColor #000000
+skinparam RectangleBackgroundColor #FFFFFF
+skinparam RectangleBorderColor #000000
+skinparam ArrowColor #000000
+skinparam ArrowThickness 0.75
+
+title cookbook-forge 用例图
+
+left to right direction
+
+actor 作者
+actor 读者
+
+rectangle "cookbook-forge" {
+  usecase "指定主题与资料" as UC0
+  usecase "采集多源资料\n(网页/GitHub/arxiv/PDF/EPUB)" as UC1
+  usecase "生成全景图与章节大纲" as UC2
+  usecase "用户确认大纲" as UC3
+  usecase "逐章写作 MDX" as UC4
+  usecase "字数达标校验" as UC5
+  usecase "输出 ElegantBook PDF" as UC6
+  usecase "输出 Nextra 网站" as UC7
+  usecase "输出优化 EPUB" as UC8
+  usecase "生成中英文 README" as UC9
+  usecase "在线浏览网站" as UC10
+  usecase "下载 PDF / EPUB" as UC11
+}
+
+作者 --> UC0
+作者 --> UC3
+UC0 ..> UC1 : <<include>>
+UC1 ..> UC2 : <<include>>
+UC2 ..> UC3 : <<include>>
+UC3 ..> UC4 : <<include>>
+UC4 ..> UC5 : <<include>>
+UC5 ..> UC6 : <<extend>>
+UC5 ..> UC7 : <<extend>>
+UC5 ..> UC8 : <<extend>>
+UC5 ..> UC9 : <<include>>
+UC7 ..> UC10 : <<include>>
+UC6 ..> UC11 : <<include>>
+UC8 ..> UC11 : <<include>>
+读者 --> UC10
+读者 --> UC11
+@enduml
