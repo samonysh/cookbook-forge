@@ -3,6 +3,8 @@ skinparam monochrome true
 skinparam shadowing false
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontColor #000000
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 11
 skinparam ActorBackgroundColor #FFFFFF
 skinparam ActorBorderColor #000000
 skinparam ComponentBackgroundColor #FFFFFF
@@ -15,82 +17,78 @@ skinparam CloudBackgroundColor #FFFFFF
 skinparam CloudBorderColor #000000
 skinparam ArrowColor #000000
 skinparam ArrowThickness 0.75
+skinparam nodesep 10
+skinparam ranksep 25
+skinparam packageStyle rectangle
 
 title cookbook-forge Component Architecture
 
+top to bottom direction
+
 actor User
 
-package "Orchestration\ncookbook-forge" {
+package "Orchestration\ncookbook-forge" as P1 {
   [SKILL.md\norchestration] as ORCH
-  [scripts/mdx2tex.mjs\nMDX -> LaTeX] as M2T
-  [scripts/build-epub.mjs\nMDX -> EPUB] as EPUB
-  [scripts/subset-fonts.mjs\nfont subsetting] as FONT
-  [scripts/word-count.mjs\nword count] as WC
-  [scripts/optimize-formula-images.mjs\nformula image repair] as FORMULA
+  [mdx2tex.mjs\nMDX→LaTeX] as M2T
+  [build-epub.mjs\nMDX→EPUB] as EPUB
+  [subset-fonts.mjs\nfont subsetting] as FONT
+  [word-count.mjs\nword count] as WC
+  [optimize-formula.mjs\nformula repair] as FORMULA
 }
 
-package "Reused Skills" {
-  [project-cookbook-latex\nresearch / 80k+ words / ElegantBook] as PCL
-  [latex-to-nextra-site\nNextra v3 / Docker / PlantUML] as L2N
-  [epub-reader-optimizer\nCSS rewrite / fonts / formula repair] as ERO
-}
-
-package "Research Tools" {
-  [agent-browser\n/vivaldi-automation] as BR
-  [WebFetch / WebSearch] as WF
+package "Research Tools" as P2 {
+  [agent-browser\n/vivaldi] as BR
+  [WebFetch/\nWebSearch] as WF
   [arxiv-watcher\n/connected-papers] as ARX
   [doc2x-cli\nPDF OCR] as D2X
   [gh-cli\nGitHub repos] as GH
 }
 
-package "Diagram Tools" {
+package "Reused Skills" as P3 {
+  [cookbook-latex\nresearch/80k words/ElegantBook] as PCL
+  [latex-to-nextra\nNextra v3/Docker/PUML] as L2N
+  [epub-optimizer\nCSS rewrite/fonts/repair] as ERO
+}
+
+package "Diagram Tools" as P4 {
   [plantuml] as PU
   [drawio] as DR
   [excalidraw] as EX
   [chart-visualization] as CH
 }
 
-package "Templates and Resources" {
-  [references/style-guide-oreilly.md] as ORE
-  [references/style-guide-springer.md] as SPR
-  [assets/template-mdx/\nchapter-template.mdx] as TPL
-  [assets/nextra-template/] as NXT
-  [assets/stylesheet.template.css] as CSS
+package "Templates & Resources" as P5 {
+  [style-guide-oreilly.md] as ORE
+  [style-guide-springer.md] as SPR
+  [chapter-template.mdx] as TPL
+  [nextra-template/] as NXT
+  [stylesheet.template.css] as CSS
 }
 
-package "Output Artifacts" {
+package "Output Artifacts" as P6 {
   database "MDX\nchapterized source" as MDX
   database "ElegantBook\nPDF" as PDF
-  cloud "Nextra site\nVercel / Docker" as WEB
+  cloud "Nextra site\nVercel/Docker" as WEB
   database "Optimized EPUB" as EOUT
 }
 
 User --> ORCH
-ORCH --> BR
-ORCH --> WF
-ORCH --> ARX
-ORCH --> D2X
-ORCH --> GH
-ORCH --> PCL
-ORCH --> L2N
-ORCH --> ERO
-ORCH --> PU
-ORCH --> DR
-ORCH --> EX
-ORCH --> CH
-ORCH --> ORE
-ORCH --> SPR
-ORCH --> TPL
-PCL --> NXT
-ERO --> CSS
+ORCH --> P2
+P2 --> P3
+P3 --> P4
+P4 --> P5
+P5 --> P6
+
+ORCH --> WC
 PCL --> M2T
 L2N --> NXT
 ERO --> EPUB
+ERO --> CSS
 EPUB --> FONT
 EPUB --> FORMULA
-ORCH --> WC
 M2T --> PDF
 PCL --> MDX
 L2N --> WEB
 EPUB --> EOUT
+
 @enduml

@@ -3,6 +3,7 @@ skinparam monochrome true
 skinparam shadowing false
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontColor #000000
+skinparam defaultFontName Helvetica
 skinparam ActorBackgroundColor #FFFFFF
 skinparam ActorBorderColor #000000
 skinparam UsecaseBackgroundColor #FFFFFF
@@ -11,43 +12,51 @@ skinparam RectangleBackgroundColor #FFFFFF
 skinparam RectangleBorderColor #000000
 skinparam ArrowColor #000000
 skinparam ArrowThickness 0.75
+skinparam defaultFontSize 11
+skinparam nodesep 12
+skinparam ranksep 20
 
 title cookbook-forge Use Case Diagram
 
-left to right direction
+top to bottom direction
 
-actor Author
-actor Reader
+actor Author as AUTHOR
+actor Reader as READER
 
 rectangle "cookbook-forge" {
-  usecase "Specify topic and sources" as UC0
-  usecase "Collect multi-source materials\n(web/GitHub/arxiv/PDF/EPUB)" as UC1
-  usecase "Generate big picture and outline" as UC2
+  usecase "Specify topic\nand sources" as UC0
+  usecase "Collect materials" as UC1
+  usecase "Generate outline" as UC2
   usecase "Approve outline" as UC3
-  usecase "Write chapter MDX" as UC4
-  usecase "Word count validation" as UC5
-  usecase "Emit ElegantBook PDF" as UC6
-  usecase "Emit Nextra website" as UC7
-  usecase "Emit optimized EPUB" as UC8
-  usecase "Generate bilingual README" as UC9
-  usecase "Browse website online" as UC10
-  usecase "Download PDF / EPUB" as UC11
+  usecase "Write chapter MDX\n+word count" as UC4
+  usecase "Emit PDF" as UC6
+  usecase "Emit Nextra site" as UC7
+  usecase "Emit EPUB" as UC8
+  usecase "Generate README" as UC9
+  usecase "Browse website" as UC10
+  usecase "Download PDF/EPUB" as UC11
 }
 
-Author --> UC0
-Author --> UC3
+AUTHOR --> UC0
+AUTHOR --> UC3
 UC0 ..> UC1 : <<include>>
 UC1 ..> UC2 : <<include>>
 UC2 ..> UC3 : <<include>>
 UC3 ..> UC4 : <<include>>
-UC4 ..> UC5 : <<include>>
-UC5 ..> UC6 : <<extend>>
-UC5 ..> UC7 : <<extend>>
-UC5 ..> UC8 : <<extend>>
-UC5 ..> UC9 : <<include>>
+UC4 ..> UC6 : <<extend>>
+UC4 ..> UC7 : <<extend>>
+UC4 ..> UC8 : <<extend>>
+UC4 ..> UC9 : <<include>>
 UC7 ..> UC10 : <<include>>
 UC6 ..> UC11 : <<include>>
 UC8 ..> UC11 : <<include>>
-Reader --> UC10
-Reader --> UC11
+READER --> UC10
+READER --> UC11
+
+UC0 -[hidden]down- UC6
+UC1 -[hidden]down- UC7
+UC2 -[hidden]down- UC8
+UC3 -[hidden]down- UC9
+UC4 -[hidden]down- UC10
+
 @enduml
