@@ -4,6 +4,7 @@ skinparam shadowing false
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontColor #000000
 skinparam defaultFontName "WenQuanYi Micro Hei"
+skinparam defaultFontSize 11
 skinparam NoteBackgroundColor #FFFFFF
 skinparam NoteBorderColor #000000
 skinparam ActivityBackgroundColor #FFFFFF
@@ -17,59 +18,59 @@ skinparam ActivityRoundCorner 10
 title cookbook-forge 工作流程
 
 start
-:阶段 0 输入识别;
+:阶段0 输入识别;
 note right
-  主题 / 资料 / 读者
-  字数 / 格式 / 图表偏好
+  主题/资料/读者
+  字数/格式/图表偏好
 end note
-:阶段 1 资料采集;
+:阶段1 资料采集;
 note right
-  URL / GitHub / arxiv /
-  PDF / EPUB / 本地 / 网络
-  -> metadata/sources.md
+  URL/GitHub/arxiv/
+  PDF/EPUB/本地/网络
+  →metadata/sources.md
 end note
 repeat
-  :阶段 2 大纲设计;
+  :阶段2 大纲设计;
   note right
-    全景图 + 章节目录
-    -> metadata/outline.md
+    全景图+章节目录
+    →metadata/outline.md
   end note
 repeat while (用户确认大纲?) is (否) not (是)
-:阶段 3 逐章 MDX;
+:阶段3 逐章 MDX;
 note right
   每章 .mdx：
-  引入 / 地图 / 原理 / 实用
-  Recipes / 陷阱 / 要点 / 延伸阅读
+  引入/地图/原理/实用
+  Recipes/陷阱/要点/延伸阅读
 end note
 while (字数未达标?) is (是)
-  :扩写 Recipes / 源码解析;
-  :速查表 / 附录;
+  :扩写 Recipes/源码解析;
+  :速查表/附录;
 endwhile (否)
-:阶段 5 多格式转换;
+:阶段5 多格式转换;
 fork
   :5a. MDX 源格式;
 fork again
   :5b. ElegantBook LaTeX;
   note right
-    xelatex 两遍编译 -> PDF
+    xelatex 两遍编译→PDF
   end note
 fork again
   :5c. Nextra 网站;
   note right
     npm run build
-    + Docker 验证
+    +Docker 验证
   end note
 fork again
   :5d. EPUB;
   note right
-    字体子集化 + CSS 重写
-    + Python 打包
+    字体子集化+CSS重写
+    +Python 打包
   end note
 end fork
-:阶段 6 最终交付;
+:阶段6 最终交付;
 note right
   中英文 README
-  + 链接 + 统计报告
+  +链接+统计报告
 end note
 stop
 @enduml
