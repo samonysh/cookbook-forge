@@ -1,24 +1,32 @@
 @startuml
+' uml-diagrams.org reference style — strict OMG UML 2.x, monochrome
 skinparam monochrome true
-skinparam shadowing false
 skinparam backgroundColor #FFFFFF
-skinparam defaultFontColor #000000
 skinparam defaultFontName "WenQuanYi Micro Hei"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam roundCorner 0
+
 skinparam ActorBackgroundColor #FFFFFF
 skinparam ActorBorderColor #000000
 skinparam UsecaseBackgroundColor #FFFFFF
 skinparam UsecaseBorderColor #000000
 skinparam RectangleBackgroundColor #FFFFFF
 skinparam RectangleBorderColor #000000
+skinparam PackageBackgroundColor #FFFFFF
+skinparam PackageBorderColor #000000
 skinparam ArrowColor #000000
 skinparam ArrowThickness 0.75
-skinparam defaultFontSize 11
-skinparam nodesep 12
-skinparam ranksep 20
+skinparam DefaultTextColor #000000
+skinparam defaultFontColor #000000
 
 title cookbook-forge 用例图
 
 top to bottom direction
+skinparam nodesep 25
+skinparam ranksep 30
+skinparam packageStyle rectangle
 
 actor 作者 as AUTHOR
 actor 读者 as READER
