@@ -2,12 +2,27 @@
   "slug": "cookbookforge",
   "title": "CookbookForge",
   "hex": "#D97706",
-  "sizes": [16, 24, 32, 48, 64, 128, 180, 256, 512],
+  "sizes": [
+    16,
+    24,
+    32,
+    48,
+    64,
+    128,
+    180,
+    256,
+    512
+  ],
   "generated_by": "logo-svg-generator skill",
-  "concept": "An open book (two pages meeting at a central 0.5-unit spine gap) with a four-pointed forge spark rising from the spine — 'forging' source material into multi-format cookbooks (LaTeX/PDF/EPUB/Nextra).",
-  "metaphor": ["open book", "forge spark / four-pointed star"],
+  "concept": "An open book (two pages meeting at a central 0.5-unit spine gap) with a four-pointed forge spark rising from the spine — 'forging' source material into multi-format cookbooks. Page details (code block, text lines, figure frame, list bullets) appear at larger sizes (64+px) and vanish at small sizes (≤32px), keeping the silhouette clean.",
+  "metaphor": [
+    "open book",
+    "forge spark / four-pointed star",
+    "page content: code lines, figure frame, list items"
+  ],
   "shape_family": "pictogram + geometric",
   "canvas": "24x24 single path, Simple Icons compliant",
   "review_iterations": 3,
-  "notes": "Monochrome master; brand-color (#D97706 amber) variant in color/ and color-png/. PNGs rendered via Pillow (cairo unavailable at build time)."
+  "review_mode": "structural-only",
+  "notes": "Enhanced v2: book pages now contain negative-space details (text lines, code block, figure frame, list bullets) visible at 64+px. Brand-color is #D97706 amber. PNGs rendered via per-pixel nonzero winding rasterizer."
 }

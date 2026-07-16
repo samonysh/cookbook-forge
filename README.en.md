@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo/logo.svg" alt="Cookbook Forge" width="96" height="96">
+  <img src="assets/logo/color-png/logo-256.png" alt="Cookbook Forge" width="128" height="128">
 </p>
 
 <h1 align="center">Cookbook Forge</h1>
