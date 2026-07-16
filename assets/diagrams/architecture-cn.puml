@@ -3,39 +3,21 @@
 skinparam monochrome true
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontName "WenQuanYi Micro Hei"
-skinparam defaultFontSize 12
+skinparam defaultFontSize 10
 skinparam shadowing false
 skinparam classAttributeIconSize 0
-skinparam sequenceMessageAlign center
 skinparam roundCorner 0
 
 skinparam ActorBackgroundColor #FFFFFF
 skinparam ActorBorderColor #000000
-skinparam ParticipantBackgroundColor #FFFFFF
-skinparam ParticipantBorderColor #000000
-skinparam NoteBackgroundColor #FFFFFF
-skinparam NoteBorderColor #000000
-skinparam SequenceGroupBackgroundColor #FFFFFF
 skinparam PackageBackgroundColor #FFFFFF
 skinparam PackageBorderColor #000000
-skinparam ClassBackgroundColor #FFFFFF
-skinparam ObjectBackgroundColor #FFFFFF
-skinparam StateBackgroundColor #FFFFFF
-skinparam StateBorderColor #000000
-skinparam UsecaseBackgroundColor #FFFFFF
-skinparam UsecaseBorderColor #000000
 skinparam ComponentBackgroundColor #FFFFFF
 skinparam ComponentBorderColor #000000
-skinparam ActivityBackgroundColor #FFFFFF
-skinparam ActivityBorderColor #000000
-skinparam NodeBackgroundColor #FFFFFF
-skinparam NodeBorderColor #000000
 skinparam DatabaseBackgroundColor #FFFFFF
 skinparam DatabaseBorderColor #000000
 skinparam CloudBackgroundColor #FFFFFF
 skinparam CloudBorderColor #000000
-skinparam RectangleBackgroundColor #FFFFFF
-skinparam RectangleBorderColor #000000
 skinparam ArrowColor #000000
 skinparam ArrowThickness 0.75
 skinparam DefaultTextColor #000000
@@ -44,88 +26,97 @@ skinparam defaultFontColor #000000
 title cookbook-forge 组件架构
 
 top to bottom direction
-skinparam nodesep 40
-skinparam ranksep 50
+skinparam nodesep 25
+skinparam ranksep 25
 skinparam packageStyle rectangle
 
-actor 用户
+actor 用户 as USER
 
 package "编排层\ncookbook-forge" as P_ORCH {
   [SKILL.md\n编排指令] as ORCH
-  [mdx2tex.mjs\nMDX→LaTeX] as M2T
-  [build-epub.mjs\nMDX→EPUB] as EPUB
-  [subset-fonts.mjs\n字体子集化] as FONT
-  [word-count.mjs\n字数统计] as WC
-  [optimize-formula.mjs\n公式图片修复] as FORMULA
-}
-
-package "复用的 Skills" as P_SKILLS {
-  [project-cookbook-latex\n资料穷尽 / 8 万字 / ElegantBook] as PCL
-  [latex-to-nextra-site\nNextra v3 / Docker / PlantUML] as L2N
-  [epub-reader-optimizer\nCSS 重写 / 字体 / 公式修复] as ERO
 }
 
 package "数据采集工具" as P_RESEARCH {
-  [agent-browser\n/vivaldi-automation] as BR
-  [WebFetch / WebSearch] as WF
-  [arxiv-watcher\n/connected-papers] as ARX
-  [doc2x-cli\nPDF OCR] as D2X
-  [gh-cli\nGitHub仓库] as GH
+  [agent-browser] as BR
+  [WebFetch/Search] as WF
+  [arxiv-watcher] as ARX
+  [doc2x-cli] as D2X
+  [gh-cli] as GH
 }
 
 package "图表工具" as P_DIAGRAM {
   [plantuml] as PU
   [drawio] as DR
   [excalidraw] as EX
-  [chart-visualization] as CH
+  [chart-viz] as CH
 }
 
-package "模板与资源" as P_TEMPLATES {
-  [references/style-guide-oreilly.md] as ORE
-  [references/style-guide-springer.md] as SPR
-  [assets/template-mdx/\nchapter-template.mdx] as TPL
-  [assets/nextra-template/] as NXT
-  [assets/stylesheet.template.css] as CSS
+package "复用 Skills" as P_SKILLS {
+  [cookbook-latex] as PCL
+  [latex-to-nextra] as L2N
+  [epub-optimizer] as ERO
+}
+
+package "构建转换" as P_BUILD {
+  [mdx2tex] as M2T
+  [build-epub] as EPUB
+  [subset-fonts] as FONT
+  [word-count] as WC
+  [fix-formula] as FORMULA
+}
+
+package "模板资源" as P_TEMPLATES {
+  [O'Reilly guide] as ORE
+  [Springer guide] as SPR
+  [chapter tpl] as TPL
+  [nextra tpl] as NXT
+  [stylesheet] as CSS
 }
 
 package "输出产物" as P_OUTPUT {
-  database "MDX\n章节化源格式" as MDX
-  database "ElegantBook\nPDF" as PDF
-  cloud "Nextra网站\nVercel/Docker" as WEB
-  database "优化EPUB" as EOUT
+  database "MDX" as MDX
+  database "PDF" as PDF
+  cloud "Website" as WEB
+  database "EPUB" as EOUT
 }
 
-用户 --> ORCH
+USER --> ORCH
 
-ORCH --> BR
-ORCH --> WF
-ORCH --> ARX
-ORCH --> D2X
-ORCH --> GH
-ORCH --> PCL
-ORCH --> L2N
-ORCH --> ERO
-ORCH --> PU
-ORCH --> DR
-ORCH --> EX
-ORCH --> CH
-ORCH --> ORE
-ORCH --> SPR
-ORCH --> TPL
-ORCH --> WC
+ORCH --> P_RESEARCH
+ORCH --> P_SKILLS
 
-PCL --> NXT
-ERO --> CSS
-PCL --> M2T
-L2N --> NXT
-ERO --> EPUB
-EPUB --> FONT
-EPUB --> FORMULA
-M2T --> PDF
-PCL --> MDX
-L2N --> WEB
-EPUB --> EOUT
+P_RESEARCH --> P_DIAGRAM
+P_SKILLS --> P_BUILD
 
-P_SKILLS -[hidden]down- P_RESEARCH
-P_DIAGRAM -[hidden]down- P_OUTPUT
+P_DIAGRAM --> P_TEMPLATES
+P_BUILD --> P_OUTPUT
+
+BR -[hidden]down- PU
+WF -[hidden]down- DR
+ARX -[hidden]down- EX
+D2X -[hidden]down- CH
+GH -[hidden]down- PCL
+
+PCL -[hidden]down- M2T
+L2N -[hidden]down- EPUB
+ERO -[hidden]down- WC
+PU -[hidden]down- ORE
+DR -[hidden]down- SPR
+
+M2T -[hidden]down- MDX
+EPUB -[hidden]down- PDF
+FONT -[hidden]down- WEB
+WC -[hidden]down- EOUT
+
+PCL ..> M2T
+PCL ..> MDX
+L2N ..> NXT
+L2N ..> WEB
+ERO ..> CSS
+ERO ..> EPUB
+EPUB ..> FONT
+EPUB ..> FORMULA
+EPUB ..> EOUT
+M2T ..> PDF
+
 @enduml
