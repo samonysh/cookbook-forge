@@ -2,7 +2,7 @@
 name: "cookbook-forge"
 slug: "cookbook-forge"
 displayName: "Cookbook Forge"
-version: "1.0.0"
+version: "1.1.0"
 license: "MIT"
 summary: "从多源资料生成深度技术 CookBook / Handbook / Survey，产出 MDX → ElegantBook PDF、Nextra 网站、优化 EPUB。"
 description: "Generates deep technical CookBooks, Handbooks, and Surveys from user materials (websites, PDFs, EPUBs, GitHub repos, arxiv papers, docs). Produces MDX chapters first, then ElegantBook LaTeX/PDF, Nextra website, and optimized EPUB. Invoke when user asks to write a Cookbook, handbook, survey, technical book, or structured long-form documentation for a project/domain."
