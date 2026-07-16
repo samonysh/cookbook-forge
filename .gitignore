@@ -11,3 +11,11 @@ __pycache__/
 *.pyc
 .next/
 coverage/
+
+# 测试输出产物（不属于 Skill 本体）
+test-output/
+
+# 生成的书籍产物
+*.epub
+*.pdf
+*.zip
