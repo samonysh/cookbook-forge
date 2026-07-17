@@ -17,6 +17,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
+import { parseFrontmatter } from "./lib/mdx-utils.mjs";
+import { extractDiagramBlocks, renderAll, replaceBlocks } from "./lib/diagram-renderer.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,23 +47,6 @@ await fs.mkdir(texDir, { recursive: true });
 await fs.mkdir(figDir, { recursive: true });
 await fs.mkdir(diagramSrcDir, { recursive: true });
 
-// ---------- 工具 ----------
-function parseFrontmatter(raw) {
-  const m = raw.match(/^---\n([\s\S]*?)\n---\n/);
-  if (!m) return { title: "Chapter", slug: "chapter", fm: {}, body: raw };
-  const fm = {};
-  for (const line of m[1].split("\n")) {
-    const mm = line.match(/^(\w+):\s*(.+)$/);
-    if (mm) fm[mm[1]] = mm[2].replace(/^["']|["']$/g, "");
-  }
-  return {
-    title: fm.title || "Chapter",
-    slug: fm.slug || "chapter",
-    fm,
-    body: raw.slice(m[0].length),
-  };
-}
-
 // ---------- 读取 Prompt 模板 ----------
 const promptTemplatePath = path.join(SKILL_ROOT, "assets", "prompts", "mdx-to-latex.md");
 const PROMPT_TEMPLATE = await fs.readFile(promptTemplatePath, "utf8");
@@ -69,30 +54,70 @@ const PROMPT_TEMPLATE = await fs.readFile(promptTemplatePath, "utf8");
 // ---------- 主转换流程 ----------
 console.log("=== LLM-driven MDX → ElegantBook LaTeX 转换器 ===\n");
 
-const mdxFiles = (await fs.readdir(mdxDir))
-  .filter(f => f.endsWith(".mdx"))
-  .sort();
+const mdxEntries = [];
+for (const f of (await fs.readdir(mdxDir)).filter(f => f.endsWith(".mdx")).sort()) {
+  const mdxPath = path.join(mdxDir, f);
+  const raw = await fs.readFile(mdxPath, "utf8");
+  const fm = parseFrontmatter(raw);
+  const chapNum = Number.parseInt(fm.fm.chapter, 10);
+  mdxEntries.push({
+    file: f,
+    mdxPath,
+    raw,
+    title: fm.title,
+    slug: fm.slug,
+    fm: fm.fm,
+    order: Number.isFinite(chapNum) ? chapNum : Number.MAX_SAFE_INTEGER,
+  });
+}
+mdxEntries.sort((a, b) => a.order - b.order || a.file.localeCompare(b.file));
 
-if (mdxFiles.length === 0) {
+if (mdxEntries.length === 0) {
   console.error("错误：mdx/ 目录下没有找到 .mdx 文件");
   process.exit(1);
 }
 
-console.log(`找到 ${mdxFiles.length} 个 MDX 章节文件:\n`);
-for (const f of mdxFiles) console.log(`  - ${f}`);
+console.log(`找到 ${mdxEntries.length} 个 MDX 章节文件（按 chapter: 字段排序）:\n`);
+for (const e of mdxEntries) console.log(`  [${e.order === Number.MAX_SAFE_INTEGER ? " -" : String(e.order).padStart(2)}] ${e.file}  →  ${e.title}`);
 console.log("");
 
 const chapterRefs = [];
 const convertedSlugs = [];
+const pendingTasks = [];
 
-for (const f of mdxFiles) {
-  const mdxPath = path.join(mdxDir, f);
-  const raw = await fs.readFile(mdxPath, "utf8");
-  const { title, slug, fm } = parseFrontmatter(raw);
+for (const entry of mdxEntries) {
+  const f = entry.file;
+  const mdxPath = entry.mdxPath;
+  const raw = entry.raw;
+  const title = entry.title;
+  const slug = entry.slug;
 
   console.log(`\n━━━ 转换章节: ${f} (${title}) ━━━`);
 
-  // 构造 LLM prompt
+  // ---------- 处理 mermaid/plantuml 代码块：先渲染成 SVG ----------
+  // 抽取本章所有图表代码块，kroki 渲染到 mdx/public/figures/diagram-<hash>.svg，
+  // 然后把 MDX 里的 ```mermaid/```plantuml 代码块替换为 LaTeX figure 引用。
+  const blocks = extractDiagramBlocks(raw);
+  let mdxForLlm = raw;
+  if (blocks.length > 0) {
+    console.log(`  提取到 ${blocks.length} 个 mermaid/plantuml 代码块，渲染中...`);
+    const results = await renderAll(path.resolve("."), blocks, {
+      onProgress: (m) => console.log("   ", m),
+    });
+    for (const r of results) {
+      try {
+        await fs.copyFile(r.svgAbsPath, path.join(figDir, r.svgFileName));
+      } catch {}
+    }
+    mdxForLlm = replaceBlocks(raw, results, (r) => {
+      const caption = r.caption.replace(/[\\{}%_#&$]/g, (c) => `\\${c}`);
+      const fname = r.svgFileName.replace(/\.svg$/, "");
+      return `\n\n\\begin{figure}[htbp]\n\\centering\n\\includegraphics[width=0.85\\textwidth]{${fname}}\n\\caption{${caption}}\n\\end{figure}\n\n`;
+    });
+    console.log(`  ✓ 已替换 ${blocks.length} 个图表代码块为 LaTeX figure 引用`);
+  }
+
+  // 构造 LLM prompt（写入 prompt 文件供 agent 读取）
   const prompt = `${PROMPT_TEMPLATE}
 
 ---
@@ -100,77 +125,64 @@ for (const f of mdxFiles) {
 ## 待转换的 MDX 文件（${f}）：
 
 \`\`\`mdx
-${raw}
+${mdxForLlm}
 \`\`\`
 
 ---
 
-请立即开始转换。只输出 LaTeX 代码，不要任何解释。`;
+请立即开始转换。只输出 LaTeX 代码，不要任何解释。输出文件第一行必须是 \\chapter{...} 或 \\chapter*{...}。
+注意：mermaid/plantuml 代码块已被预处理为 \\begin{figure}...\\end{figure} 引用，请保留这些 LaTeX 代码原样，不要再尝试渲染或处理 mermaid 源码。`;
 
-  // 将 prompt 写入临时文件，供子 agent 读取
   const promptFile = path.join(texDir, `._prompt_${slug}.txt`);
   await fs.writeFile(promptFile, prompt, "utf8");
 
-  // 通过 TRAE CLI 调用子 agent 进行转换
-  // 这里我们使用一个约定：子 agent 读取 prompt 文件，将结果写入输出文件
   const texOutputPath = path.join(texDir, `${slug}.tex`);
-  const agentPrompt = `Read the conversion instructions from "${promptFile}", then convert the MDX chapter "${f}" to LaTeX according to those instructions. Write the resulting LaTeX code to "${texOutputPath}". Write ONLY the raw LaTeX code to the file (no markdown fences, no explanations). The file must start with \\chapter or \\chapter* on the first line.`;
 
-  console.log(`  调用 LLM 转换中...`);
+  console.log(`  PROMPT_FILE: ${promptFile}`);
+  console.log(`  OUTPUT_FILE: ${texOutputPath}`);
 
-  // 使用 TRAE 的 agent 子进程来执行转换
-  // 这里我们通过动态 import 的方式调用子 agent
-  // 实际运行时，TRAE 会将 Task 调用路由到 LLM
+  // 尝试读取已有缓存
   let texContent = null;
-
   try {
-    // 尝试读取是否已经有缓存的转换结果
-    try {
-      texContent = await fs.readFile(texOutputPath, "utf8");
-      if (texContent.trim().startsWith("\\chapter")) {
-        console.log(`  使用缓存结果 (${texOutputPath} 已存在)`);
-      } else {
-        texContent = null;
-      }
-    } catch {
-      // 文件不存在，需要 LLM 转换
+    texContent = await fs.readFile(texOutputPath, "utf8");
+    if (!texContent.trim().startsWith("\\chapter")) {
+      texContent = null;
+    } else {
+      console.log(`  ✓ 使用缓存结果`);
     }
+  } catch {
+    // 文件不存在
+  }
 
-    if (!texContent) {
-      // 我们不能在 .mjs 脚本中直接调用 LLM API，
-      // 所以这里输出指令让主 agent（即 TRAE）执行子任务
-      // 我们将在下面通过 Task tool 来实现这个调用
-      //
-      // 临时方案：输出待转换文件信息到 stdout，
-      // 主 agent 负责逐章调用 Task
-      console.log(`  [WAITING_FOR_LLM] 需要 LLM 转换: ${f}`);
-      console.log(`  PROMPT_FILE: ${promptFile}`);
-      console.log(`  OUTPUT_FILE: ${texOutputPath}`);
-      console.log(`  SLUG: ${slug}`);
-      console.log(`  TITLE: ${title}`);
+  if (!texContent) {
+    pendingTasks.push({
+      format: "latex",
+      mdxFile: f,
+      mdxPath,
+      promptFile,
+      outputFile: texOutputPath,
+      slug,
+      title,
+      validation: { mustStartWith: "\\chapter" },
+    });
 
-      // 写入占位符
-      const placeholder = `% LLM_CONVERSION_PENDING: ${f}
-% This chapter needs to be converted by LLM.
-% Run: node lmdx2tex.mjs  to trigger LLM conversion, or
-% manually convert using the prompt at ${promptFile}
+    const placeholder = `% LLM_CONVERSION_PENDING: ${f}
+% This chapter needs to be converted by an LLM agent.
+% Prompt file: ${promptFile}
+% Output file: ${texOutputPath}
+%
+% After filling this file, re-run: node lmdx2tex.mjs
 \\chapter{${title.replace(/[_#&%$]/g, '\\$&')}}
 \\label{ch:${slug}}
 
-% [LLM output will be placed here]
+% [LLM output will replace this block]
 `;
-      await fs.writeFile(texOutputPath, placeholder, "utf8");
-      texContent = placeholder;
-    }
-  } catch (err) {
-    console.error(`  转换失败: ${err.message}`);
-    texContent = `\\chapter{${title}}\\label{ch:${slug}}\n% Error: ${err.message}\n`;
-    await fs.writeFile(texOutputPath, texContent, "utf8");
+    await fs.writeFile(texOutputPath, placeholder, "utf8");
+    console.log(`  ⚠ 写入占位符 — 待 LLM 转换`);
   }
 
   chapterRefs.push({ slug, f, title, texPath: texOutputPath });
   convertedSlugs.push(slug);
-  console.log(`  ✓ 已输出: ${slug}.tex`);
 }
 
 // ---------- 拷贝图片资源 ----------
@@ -226,9 +238,35 @@ mainTemplate = mainTemplate
 
 await fs.writeFile(path.resolve("latex/main.tex"), mainTemplate, "utf8");
 
-// ---------- 清理临时 prompt 文件 ----------
-for (const slug of convertedSlugs) {
-  const pf = path.join(texDir, `._prompt_${slug}.txt`);
+// ---------- 输出结构化任务清单（供 TRAE agent 编排）----------
+// 保留 prompt 文件以便 agent 读取（不删除），并写一份 JSON 清单。
+const planPath = path.resolve("latex/.conversion-plan.json");
+const plan = {
+  format: "latex",
+  bookTitle: BOOK_TITLE,
+  totalChapters: chapterRefs.length,
+  pendingCount: pendingTasks.length,
+  pending: pendingTasks,
+  cached: chapterRefs
+    .filter(c => !pendingTasks.some(p => p.slug === c.slug))
+    .map(c => ({ slug: c.slug, file: c.f, title: c.title, texPath: c.texPath })),
+  instructions: pendingTasks.length
+    ? [
+        "For each task in `pending`, invoke a Task/sub-agent with these instructions:",
+        "  1. Read `promptFile` (it contains full conversion rules + the MDX source).",
+        "  2. Convert the MDX chapter to ElegantBook LaTeX per those rules.",
+        "  3. Write ONLY raw LaTeX code to `outputFile` (no markdown fences, no prose).",
+        "  4. First line must be \\chapter{...} or \\chapter*{...}.",
+        "After all tasks complete, re-run `node lmdx2tex.mjs` to regenerate main.tex with final content.",
+      ]
+    : ["All chapters already converted; main.tex is ready for xelatex."],
+};
+await fs.writeFile(planPath, JSON.stringify(plan, null, 2), "utf8");
+
+// ---------- 清理临时 prompt 文件（仅对已缓存章节） ----------
+for (const c of chapterRefs) {
+  if (pendingTasks.some(p => p.slug === c.slug)) continue;
+  const pf = path.join(texDir, `._prompt_${c.slug}.txt`);
   try { await fs.unlink(pf); } catch {}
 }
 
@@ -237,8 +275,17 @@ console.log(`\n已生成:`);
 console.log(`  - latex/main.tex (主文件，使用 ElegantBook 文档类)`);
 console.log(`  - latex/chapters/ (${chapterRefs.length} 个章节文件)`);
 console.log(`  - latex/figures/ (图片资源)`);
-console.log(`\n注意: 章节文件中标记为 [WAITING_FOR_LLM] 的需要 LLM 填充实际内容。`);
-console.log(`请使用 TRAE agent 逐个转换这些章节（见 lmdx2tex-convert.mjs 或手工调用）。`);
+if (pendingTasks.length > 0) {
+  console.log(`\n⚠ 有 ${pendingTasks.length} 个章节需要 LLM 转换：`);
+  for (const t of pendingTasks) {
+    console.log(`    • ${t.slug}  →  ${t.outputFile}`);
+  }
+  console.log(`\n任务清单已写入: ${planPath}`);
+  console.log(`主 agent（TRAE）读取该 JSON 后可并发调度 Task 逐章转换。`);
+  console.log(`全部转换完成后重新运行: node lmdx2tex.mjs`);
+} else {
+  console.log(`\n✓ 所有章节已转换完成。`);
+}
 console.log(`\n编译方法:`);
-console.log(`  1. 将 ElegantBook 的 elegantbook.cls 放入 latex/ 目录`);
+console.log(`  1. 将 ElegantBook 的 elegantbook.cls 放入 latex/ 目录（TeXLive 用户已自带）`);
 console.log(`  2. cd latex && xelatex main.tex && xelatex main.tex`);

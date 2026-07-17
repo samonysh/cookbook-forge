@@ -13,8 +13,23 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// 动态定位仓库根目录：从 __dirname 向上查找包含 scripts/lib/diagram-renderer.mjs 的目录。
+// 这样无论脚本运行在 <repo>/assets/nextra-template/scripts/ 还是被拷贝到 <book>/nextra-site/scripts/ 都能正确定位。
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+let REPO_ROOT = path.resolve(__dirname);
+while (REPO_ROOT !== path.parse(REPO_ROOT).root) {
+  try {
+    await fs.access(path.join(REPO_ROOT, "scripts", "lib", "diagram-renderer.mjs"));
+    break;
+  } catch {
+    REPO_ROOT = path.dirname(REPO_ROOT);
+  }
+}
+const diagModUrl = new URL(
+  `file://${path.join(REPO_ROOT, "scripts", "lib", "diagram-renderer.mjs").replace(/\\/g, "/")}`
+).href;
+const { extractDiagramBlocks, renderAll, replaceBlocks } = await import(diagModUrl);
 
 function parseArgs(argv) {
   const opts = {};
@@ -48,9 +63,23 @@ await fs.mkdir(zhDir, { recursive: true });
 await fs.mkdir(enDir, { recursive: true });
 
 if (await fs.stat(mdxDir).catch(() => null)) {
+  // bookRoot 是 mdx/ 的父目录（renderAll 期望 <bookRoot>/mdx/public/figures 存在）
+  const bookRoot = path.resolve(path.join(mdxDir, ".."));
   const mdxFiles = (await fs.readdir(mdxDir)).filter(f => f.endsWith(".mdx"));
   for (const f of mdxFiles) {
     let content = await fs.readFile(path.join(mdxDir, f), "utf8");
+
+    // ---- 处理 mermaid/plantuml 内嵌代码块：调用 kroki 渲染为 SVG，并在 MDX 里替换为图片引用 ----
+    const blocks = extractDiagramBlocks(content);
+    if (blocks.length > 0) {
+      console.log(`  [${f}] 发现 ${blocks.length} 个 mermaid/plantuml 代码块，渲染到 SVG...`);
+      const results = await renderAll(bookRoot, blocks, {
+        onProgress: (m) => console.log("    ", m),
+      });
+      content = replaceBlocks(content, results);
+      console.log(`  [${f}] 已替换 ${blocks.length} 个图表代码块为图片引用`);
+    }
+
     // Nextra 站点里图片引用走 /figures/
     content = content.replace(/public\/figures\//g, "/figures/");
     await fs.writeFile(path.join(zhDir, f), content, "utf8");
