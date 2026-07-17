@@ -223,7 +223,7 @@ try {
 // ---------- 生成 main.tex ----------
 console.log("\n━━━ 生成 main.tex ━━━");
 
-const mainTemplatePath = path.join(SKILL_ROOT, "assets", "elegantbook-main.template.tex");
+const mainTemplatePath = path.join(SKILL_ROOT, "assets", "elegantbook-main.template.tex.txt");
 let mainTemplate = await fs.readFile(mainTemplatePath, "utf8");
 
 const inputs = chapterRefs.map(c => `\\input{chapters/${c.slug}}`).join("\n");
