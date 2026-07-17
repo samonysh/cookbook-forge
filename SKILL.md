@@ -344,7 +344,10 @@ references:
    - hyperref 蓝色链接
    - 图形路径 `\graphicspath{{figures/}}`
    - 防止孤行寡行
-5. **编译**：将 ElegantBook 的 `elegantbook.cls` 放入 `latex/` 目录，运行 `xelatex main.tex && xelatex main.tex`。
+5. **编译**：ElegantBook 文档类依赖 `elegantbook.cls`，需要先准备好 cls 文件：
+   - **TeXLive/MiKTeX 用户**：`tlmgr install elegantbook`（或在 TeXLive Manager 中搜索安装）
+   - **手动获取**：从 [ElegantLaTeX/elegantbook](https://github.com/ElegantLaTeX/ElegantBook) 下载 `elegantbook.cls`，复制到 `latex/` 目录
+   - 准备好后运行：`cd latex && xelatex main.tex && xelatex main.tex`（两遍以生成目录/交叉引用）
 6. **质量闸门**：
    - PDF 不得出现 Markdown 表格源码
    - 表格必须 LaTeX 环境，不得过挤

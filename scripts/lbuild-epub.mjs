@@ -13,6 +13,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
+import { parseFrontmatter } from "./lib/mdx-utils.mjs";
+import { extractDiagramBlocks, renderAll, replaceBlocks } from "./lib/diagram-renderer.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,22 +51,6 @@ function escHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-function parseFrontmatter(raw) {
-  const m = raw.match(/^---\n([\s\S]*?)\n---\n/);
-  if (!m) return { title: "Chapter", slug: "chapter", fm: {}, body: raw };
-  const fm = {};
-  for (const line of m[1].split("\n")) {
-    const mm = line.match(/^(\w+):\s*(.+)$/);
-    if (mm) fm[mm[1]] = mm[2].replace(/^["']|["']$/g, "");
-  }
-  return {
-    title: fm.title || "Chapter",
-    slug: fm.slug || "chapter",
-    fm,
-    body: raw.slice(m[0].length),
-  };
-}
-
 // ---------- 读取 Prompt 模板 ----------
 const promptTemplatePath = path.join(SKILL_ROOT, "assets", "prompts", "mdx-to-epub.md");
 const PROMPT_TEMPLATE = await fs.readFile(promptTemplatePath, "utf8");
@@ -72,29 +58,66 @@ const PROMPT_TEMPLATE = await fs.readFile(promptTemplatePath, "utf8");
 // ---------- 主流程 ----------
 console.log("=== LLM-driven MDX → EPUB3 转换器 ===\n");
 
-const mdxFiles = (await fs.readdir(mdxDir))
-  .filter(f => f.endsWith(".mdx"))
-  .sort();
+const mdxEntries = [];
+for (const f of (await fs.readdir(mdxDir)).filter(f => f.endsWith(".mdx")).sort()) {
+  const mdxPath = path.join(mdxDir, f);
+  const raw = await fs.readFile(mdxPath, "utf8");
+  const fm = parseFrontmatter(raw);
+  const chapNum = Number.parseInt(fm.fm.chapter, 10);
+  mdxEntries.push({
+    file: f,
+    mdxPath,
+    raw,
+    title: fm.title,
+    slug: fm.slug,
+    fm: fm.fm,
+    order: Number.isFinite(chapNum) ? chapNum : Number.MAX_SAFE_INTEGER,
+  });
+}
+mdxEntries.sort((a, b) => a.order - b.order || a.file.localeCompare(b.file));
 
-if (mdxFiles.length === 0) {
+if (mdxEntries.length === 0) {
   console.error("错误：mdx/ 目录下没有找到 .mdx 文件");
   process.exit(1);
 }
 
-console.log(`找到 ${mdxFiles.length} 个 MDX 章节文件:\n`);
-for (const f of mdxFiles) console.log(`  - ${f}`);
+console.log(`找到 ${mdxEntries.length} 个 MDX 章节文件（按 chapter: 字段排序）:\n`);
+for (const e of mdxEntries) console.log(`  [${e.order === Number.MAX_SAFE_INTEGER ? " -" : String(e.order).padStart(2)}] ${e.file}  →  ${e.title}`);
 console.log("");
 
 const chapterFiles = [];
+const pendingTasks = [];
 
-for (const f of mdxFiles) {
-  const mdxPath = path.join(mdxDir, f);
-  const raw = await fs.readFile(mdxPath, "utf8");
-  const { title, slug, fm } = parseFrontmatter(raw);
+for (const entry of mdxEntries) {
+  const f = entry.file;
+  const mdxPath = entry.mdxPath;
+  const raw = entry.raw;
+  const title = entry.title;
+  const slug = entry.slug;
   const xhtmlName = f.replace(/\.mdx$/, ".xhtml");
   const xhtmlPath = path.join(OEBPS, "Text", xhtmlName);
 
   console.log(`\n━━━ 转换章节: ${f} (${title}) ━━━`);
+
+  // ---------- 处理 mermaid/plantuml 代码块：先渲染成 SVG ----------
+  const blocks = extractDiagramBlocks(raw);
+  let mdxForLlm = raw;
+  if (blocks.length > 0) {
+    console.log(`  提取到 ${blocks.length} 个 mermaid/plantuml 代码块，渲染中...`);
+    const results = await renderAll(path.resolve("."), blocks, {
+      onProgress: (m) => console.log("   ", m),
+    });
+    for (const r of results) {
+      try {
+        await fs.copyFile(r.svgAbsPath, path.join(imgDir, r.svgFileName));
+      } catch {}
+    }
+    mdxForLlm = replaceBlocks(raw, results, (r) => {
+      const alt = r.caption.replace(/"/g, "&quot;");
+      return `\n\n![${r.caption}](/figures/${r.svgFileName})\n\n图：${r.caption}\n\n`;
+    });
+    console.log(`  ✓ 已替换 ${blocks.length} 个图表代码块为 Markdown 图片引用`);
+  }
 
   // 构造 LLM prompt
   const prompt = `${PROMPT_TEMPLATE}
@@ -104,17 +127,19 @@ for (const f of mdxFiles) {
 ## 待转换的 MDX 文件（${f}）：
 
 \`\`\`mdx
-${raw}
+${mdxForLlm}
 \`\`\`
 
 ---
 
-请立即开始转换。只输出完整的 XHTML 文档，不要任何解释。`;
+请立即开始转换。只输出完整的 XHTML 文档，不要任何解释。输出必须以 <?xml 开头。
+注意：mermaid/plantuml 代码块已被预处理为 ![caption](/figures/diagram-<hash>.svg) 图片语法，请把这些图片转换为 <figure><img src="../Images/<svg-file>"/></figure>，不要保留 mermaid 源码。`;
 
   const promptFile = path.join(OEBPS, "Text", `._prompt_${slug}.txt`);
   await fs.writeFile(promptFile, prompt, "utf8");
 
-  console.log(`  调用 LLM 转换中...`);
+  console.log(`  PROMPT_FILE: ${promptFile}`);
+  console.log(`  OUTPUT_FILE: ${xhtmlPath}`);
 
   let xhtmlContent = null;
   try {
@@ -122,14 +147,21 @@ ${raw}
     if (!xhtmlContent.includes("<?xml")) {
       xhtmlContent = null;
     } else {
-      console.log(`  使用缓存结果 (${xhtmlName} 已存在)`);
+      console.log(`  ✓ 使用缓存结果`);
     }
   } catch {}
 
   if (!xhtmlContent) {
-    console.log(`  [WAITING_FOR_LLM] 需要 LLM 转换: ${f}`);
-    console.log(`  PROMPT_FILE: ${promptFile}`);
-    console.log(`  OUTPUT_FILE: ${xhtmlPath}`);
+    pendingTasks.push({
+      format: "epub-xhtml",
+      mdxFile: f,
+      mdxPath,
+      promptFile,
+      outputFile: xhtmlPath,
+      slug,
+      title,
+      validation: { mustStartWith: "<?xml" },
+    });
 
     // 生成占位 XHTML
     const placeholder = `<?xml version="1.0" encoding="UTF-8"?>
@@ -141,12 +173,13 @@ ${raw}
 <link rel="stylesheet" type="text/css" href="../css/stylesheet.css"/>
 </head>
 <body>
-<h2>${escHtml(title)}</h2>
-<p><em>此章节需要 LLM 转换。请运行 lbuild-epub.mjs 并通过 TRAE agent 完成转换。</em></p>
+<h1>${escHtml(title)}</h1>
+<p><em>此章节需要 LLM 转换。任务清单见 ${escHtml("epub/.conversion-plan.json")}。</em></p>
 </body>
 </html>`;
     await fs.writeFile(xhtmlPath, placeholder, "utf8");
     xhtmlContent = placeholder;
+    console.log(`  ⚠ 写入占位符 — 待 LLM 转换`);
   }
 
   chapterFiles.push({
@@ -155,11 +188,6 @@ ${raw}
     title,
     f,
   });
-
-  // 清理 prompt 文件
-  try { await fs.unlink(promptFile); } catch {}
-
-  console.log(`  ✓ 已输出: ${xhtmlName}`);
 }
 
 // ---------- 拷贝图片 ----------
@@ -378,6 +406,12 @@ hr {
 await fs.writeFile(path.join(OEBPS, "css", "stylesheet.css"), css, "utf8");
 console.log("  ✓ css/stylesheet.css (EpubReaderOptimizer + CookBook 样式)");
 
+// ---------- 打包前清理临时 prompt 文件 ----------
+for (const c of chapterFiles) {
+  const pf = path.join(OEBPS, "Text", `._prompt_${c.id}.txt`);
+  try { await fs.unlink(pf); } catch {}
+}
+
 // ---------- 打包 EPUB（使用 Python zipfile）----------
 console.log("\n━━━ 打包 EPUB ━━━");
 
@@ -416,16 +450,55 @@ assert z.read("mimetype") == b"application/epub+zip"
 print(f"EPUB OK: {len(z.namelist())} entries, {OUT.stat().st_size / 1024:.1f} KB")
 `;
 
+const tmpScript = path.join(outDir, "_pack_epub.py");
+await fs.writeFile(tmpScript, buildScript, "utf8");
 try {
-  execSync(`python -c "${buildScript.replace(/"/g, '\\"')}"`, { stdio: "inherit" });
-} catch {
-  // Fallback: write script to temp file and execute
-  const tmpScript = path.join(outDir, "_pack_epub.py");
-  await fs.writeFile(tmpScript, buildScript, "utf8");
   execSync(`python "${tmpScript}"`, { stdio: "inherit" });
+} finally {
   try { await fs.unlink(tmpScript); } catch {}
+}
+
+// ---------- 输出结构化任务清单（供 TRAE agent 编排）----------
+const planPath = path.join(outDir, ".conversion-plan.json");
+const plan = {
+  format: "epub",
+  bookTitle: BOOK_TITLE,
+  totalChapters: chapterFiles.length,
+  pendingCount: pendingTasks.length,
+  pending: pendingTasks,
+  cached: chapterFiles
+    .filter(c => !pendingTasks.some(p => p.slug === c.id))
+    .map(c => ({ slug: c.id, file: c.f, title: c.title, href: c.href })),
+  instructions: pendingTasks.length
+    ? [
+        "For each task in `pending`, invoke a Task/sub-agent with these instructions:",
+        "  1. Read `promptFile` (full conversion rules + MDX source).",
+        "  2. Convert the MDX chapter to EPUB3 XHTML per those rules.",
+        "  3. Write ONLY the complete XHTML document to `outputFile` (no markdown fences, no prose).",
+        "  4. Output must start with `<?xml` and have <h1>chapter title</h1> as the first element in <body>.",
+        "After all tasks complete, re-run `node lbuild-epub.mjs` to regenerate content.opf/nav.xhtml and re-zip book.epub.",
+      ]
+    : ["All chapters already converted; book.epub is ready."],
+};
+await fs.writeFile(planPath, JSON.stringify(plan, null, 2), "utf8");
+
+// ---------- 清理临时 prompt 文件（仅对已缓存章节）----------
+for (const c of chapterFiles) {
+  if (pendingTasks.some(p => p.slug === c.id)) continue;
+  const pf = path.join(OEBPS, "Text", `._prompt_${c.id}.txt`);
+  try { await fs.unlink(pf); } catch {}
 }
 
 console.log(`\n━━━ 完成 ━━━`);
 console.log(`EPUB 输出: ${epubOut}`);
-console.log(`\n注意: 章节中若有 [WAITING_FOR_LLM] 标记，需要 LLM 填充实际 XHTML 内容。`);
+if (pendingTasks.length > 0) {
+  console.log(`\n⚠ 有 ${pendingTasks.length} 个章节需要 LLM 转换：`);
+  for (const t of pendingTasks) {
+    console.log(`    • ${t.slug}  →  ${t.outputFile}`);
+  }
+  console.log(`\n任务清单已写入: ${planPath}`);
+  console.log(`主 agent（TRAE）读取该 JSON 后可并发调度 Task 逐章转换。`);
+  console.log(`全部转换完成后重新运行: node lbuild-epub.mjs`);
+} else {
+  console.log(`\n✓ 所有章节已转换完成，EPUB 可直接分发。`);
+}

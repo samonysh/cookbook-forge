@@ -8,7 +8,6 @@ const withNextra = nextra({
     renderer: 'katex',
     options: { strict: 'ignore', trust: true, displayMode: false }
   },
-  mermaid: true,
   search: { codeblocks: false },
   mdxOptions: {
     rehypePrettyCodeOptions: { theme: 'github-dark-dimmed' }

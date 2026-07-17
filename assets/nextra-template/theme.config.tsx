@@ -13,8 +13,7 @@ const config: DocsThemeConfig = {
   editLink: { content: '在 GitHub 上编辑此页 →' },
   feedback: { content: '问题或建议？' },
   footer: { content: '© {{YEAR}} {{BOOK_TITLE}} · 基于 Nextra 构建' },
-  toc: { backToTop: true },
-  mermaid: true
+  toc: { backToTop: true }
 }
 
 export default config
