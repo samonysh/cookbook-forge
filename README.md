@@ -10,7 +10,7 @@
 
 <p align="center">
   从多源资料出发，按 O'Reilly CookBook 与 Springer Handbook 风格，<br>
-  先生成章节化 MDX，再转换为 ElegantBook PDF、Nextra 网站、优化 EPUB。
+  先生成章节化 MDX，再转换为 ElegantBook PDF、Nextra 网站、优化 EPUB、Typst PDF。
 </p>
 
 ---
@@ -29,14 +29,16 @@
 
 - 📚 **生成任意技术领域的 CookBook / 手册 / 综述**
 - 🔍 **多源资料采集**：网页爬取（含 sitemap）、GitHub 仓库、arxiv 论文、PDF OCR、EPUB 解包、本地源码/文档、网络搜索
+- 🔍 **论文搜索**：支持 `paper-search`（MCP）从 arXiv、PubMed、Semantic Scholar 等 20+ 来源搜索论文
 - 🏛️ **架构先行**：先生成整体全景图与章节大纲，与用户对齐后再逐章写作
 - 📝 **MDX 为权威中间格式**：每章一个 `.mdx`，便于后续多格式转换
 - 🎨 **丰富图表**：mermaid / plantuml / drawio / excalidraw / chart，按用户偏好选用
-- 📖 **三种最终输出格式**（可组合）：
+- 📖 **四种最终输出格式**（可组合）：
   - **MDX**（默认）：章节化 Markdown + JSX，适合作为源格式
   - **ElegantBook LaTeX + PDF**：基于 [ElegantLaTeX/ElegantBook](https://github.com/ElegantLaTeX/ElegantBook)，xelatex 编译
   - **Nextra v3 网站**：基于 [Nextra](https://nextra.site)，支持明暗模式、全文搜索、i18n、KaTeX、一键 Vercel/Docker 部署
   - **优化 EPUB**：LXGW WenKai 子集化嵌入、booktabs 表格、tcolorbox 风格代码块、兼容老旧阅读器
+  - **Typst PDF**：基于 [ilm](https://typst.app/universe/package/ilm) 模板，LXGW WenKai 中文字体、四色 callout 提示框、booktabs 表格、代码块圆角边框
 - 🌏 **中英文 README 自动生成**（书籍项目自带）
 
 ## 何时使用
@@ -56,37 +58,38 @@ cookbook-forge/
 ├── README.md                             # 中文说明（本文件）
 ├── README.en.md                          # 英文说明
 ├── scripts/
-│   ├── mdx2tex.mjs                       # MDX → ElegantBook LaTeX 转换
-│   ├── word-count.mjs                    # 字数统计（中文字符 + 英文词数）
-│   ├── build-epub.mjs                    # MDX → EPUB 完整构建（XHTML + OPF/NCX/NAV + CSS + ZIP）
-│   ├── epub-zip.mjs                      # EPUB 合规打包（Node 内置 zlib，零依赖）
-│   ├── subset-fonts.mjs                  # 字体子集化（JS：fonteditor-core → WOFF2；含 Python fallback 提示）
-│   ├── optimize-formula-images.mjs       # 公式即图片型 HTML 结构修复（纯 JS 正则）
-│   └── kroki-render.mjs                  # PlantUML 通过 Kroki.io 远程渲染
+│   ├── lib/
+│   │   ├── diagram-renderer.mjs          # 统一图表渲染 pipeline（mermaid/plantuml -> Kroki SVG）
+│   │   └── mdx-utils.mjs                 # MDX frontmatter 解析工具
+│   ├── lmdx2tex.mjs                      # LLM 驱动 MDX -> ElegantBook LaTeX 转换
+│   ├── lmdx2typst.mjs                    # LLM 驱动 MDX -> Typst（ilm 模板）转换
+│   ├── lbuild-epub.mjs                   # LLM 驱动 MDX -> EPUB3 转换
+│   ├── render-diagrams.mjs               # 图表渲染（mermaid/plantuml -> SVG）
+│   ├── word-count.mjs                    # 字数统计
+│   ├── epub-zip.mjs                      # EPUB 合规打包
+│   ├── subset-fonts.mjs                  # 字体子集化
+│   ├── optimize-formula-images.mjs       # 公式图片修复
+│   ├── kroki-render.mjs                  # PlantUML Kroki 渲染
+│   └── build-skill.mjs                   # Skill 打包脚本
 ├── references/
 │   ├── style-guide-oreilly.md            # O'Reilly CookBook 写作风格参考
-│   └── style-guide-springer.md           # Springer Handbook 写作风格参考
+│   ├── style-guide-springer.md           # Springer Handbook 写作风格参考
+│   ├── stage-5a-mdx.md                   # 阶段 5a：MDX 输出子流程
+│   ├── stage-5b-latex.md                 # 阶段 5b：LaTeX + PDF 子流程
+│   ├── stage-5c-nextra.md                # 阶段 5c：Nextra 网站子流程
+│   ├── stage-5d-epub.md                  # 阶段 5d：EPUB 子流程
+│   └── stage-5e-typst.md                 # 阶段 5e：Typst 子流程
 └── assets/
-    ├── logo/                             # 品牌 logo（SVG / PNG / favicon）
-    ├── diagrams/                         # Skill 自身架构/流程/用例图
+    ├── prompts/
+    │   ├── mdx-to-latex.md               # MDX->LaTeX 转换 Prompt
+    │   ├── mdx-to-epub.md                # MDX->EPUB XHTML 转换 Prompt
+    │   └── mdx-to-typst.md               # MDX->Typst 转换 Prompt
     ├── template-mdx/
     │   └── chapter-template.mdx          # 单章 MDX 写作模板
-    ├── nextra-template/                  # Nextra 站点骨架（可拷贝使用）
-    │   ├── package.json
-    │   ├── next.config.mjs
-    │   ├── theme.config.tsx
-    │   ├── middleware.js
-    │   ├── Dockerfile
-    │   ├── docker-compose.yml
-    │   ├── pages/
-    │   ├── components/
-    │   ├── styles/globals.css
-    │   └── scripts/
-    │       ├── render-plantuml.mjs       # Docker 批量渲染 PlantUML
-    │       ├── build-meta.mjs            # 自动生成 _meta.ts
-    │       ├── renumber-content.mjs      # 跨章引用重编号
-    │       └── scaffold-nextra.mjs       # 站点占位符替换 & MDX 拷贝
-    ├── stylesheet.template.css           # EPUB 基础 CSS（双语/中文优化）
+    ├── nextra-template/                  # Nextra 站点骨架
+    ├── elegantbook-main.template.tex.txt # ElegantBook LaTeX 模板
+    ├── ilm-template.typ.txt              # Typst ilm 模板（优化样式）
+    ├── stylesheet.template.css           # EPUB 基础 CSS
     └── stylesheet.formula-image.css      # 公式图片型 EPUB CSS
 ```
 
@@ -111,11 +114,12 @@ cookbook-forge/
 阶段 2  大纲设计     → 全景图 + 章节目录 → metadata/outline.md ⚠️ 必须用户确认
 阶段 3  逐章 MDX     → 每章 .mdx：引入/地图/原理/实用/Recipes/陷阱/要点/延伸阅读
 阶段 4  字数统计     → 不足则扩写 Recipes/源码解析/速查表/附录
-阶段 5  多格式转换
+阶段 5  多格式转换（每种格式生成后子 agent 检查修复）
   5a.  MDX          （默认）
-  5b.  ElegantBook  → xelatex 两遍编译 → PDF
-  5c.  Nextra 网站  → npm run build + Docker 验证
-  5d.  EPUB         → 字体子集化 + CSS 重写 + Python 打包
+  5b.  ElegantBook  -> xelatex 两遍编译 -> PDF
+  5c.  Nextra 网站  -> npm run build + Docker 验证
+  5d.  EPUB         -> 字体子集化 + CSS 重写 + Python 打包
+  5e.  Typst        -> ilm 模板 + typst compile -> PDF
 阶段 6  最终交付     → 中英文 README + 链接 + 统计报告
 ```
 
@@ -128,10 +132,12 @@ cookbook-forge/
 - `agent-browser` / `vivaldi-automation`：网页爬取与站点地图遍历
 - `WebFetch` / `WebSearch`：网络资料抓取
 - `arxiv-watcher` / `connected-papers-browser`：论文检索
+- `paper-search`（MCP）：论文搜索（arXiv、PubMed、Semantic Scholar 等 20+ 来源）
 - `doc2x-cli`：PDF OCR / 解析
 - `gh-cli`：GitHub 仓库读取
 - `plantuml` / `drawio` / `excalidraw` / `chart-visualization`：图表生成
 - `elegantbook-latex`：LaTeX 排版优化
+- Typst CLI（用于 Typst PDF 编译，仅在需要 Typst 输出时）
 - Node.js ≥ 18.17（Nextra 构建 / EPUB 打包 / 字体子集化）
 - 可选：`fonteditor-core`（`npm install fonteditor-core`，用于字体子集化；若未安装，脚本会提示并给出 Python fonttools fallback）
 - Docker（用于 PlantUML 渲染和 Nextra 部署验证）
@@ -151,21 +157,32 @@ cookbook-forge/
 - [ ] PDF：xelatex 编译通过；封面 1280×1024 非空；无 Markdown 残留
 - [ ] Nextra：`npm run build` 通过；Docker healthy；`/zh` 200
 - [ ] EPUB：mimetype 第一且 STORED；字体子集化嵌入；CSS 生效
+- [ ] Typst：typst compile 零 error；无 Markdown/LaTeX 语法残留；中文字体正确配置
+- [ ] 图表：原始源码保留在 diagrams-src/，渲染产物在 figures/
 
-## 发布到 SkillHub
+## 安装与发布
+
+### 通过 skills.sh 安装
+
+```bash
+npx skills samonysh/cookbook-forge
+```
+
+### 通过 SkillHub 发布
 
 本 Skill 目录结构符合 [SkillHub 发布规范](https://skillhub.cn/tutorials#publish-manage-skill)：
 
 - ✅ 根目录 `SKILL.md`（含 `name` / `slug` / `displayName` / `version` / `license` / `summary` / `description` / `tags` 等 frontmatter）
 - ✅ `scripts/` 可执行脚本（`.mjs`）
-- ✅ `references/` 按需加载的参考文档（写作风格指南）
-- ✅ `assets/` 模板与资源文件（logo、图表、MDX 模板、Nextra 骨架、CSS）
+- ✅ `references/` 按需加载的参考文档（写作风格指南 + 阶段 5 子流程）
+- ✅ `assets/` 模板与资源文件（Prompts、MDX 模板、Nextra 骨架、CSS、Typst 模板）
 - ✅ 中英文 `README.md` / `README.en.md`
 
-通过 CLI 发布：
+打包发布：
 
 ```bash
-skillhub publish ./cookbook-forge --changelog "首次发布"
+node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.3.0.zip
+skillhub publish ./cookbook-forge --changelog "v1.3.0: 新增 Typst 输出、图表双格式、阶段5分拆、质量检查"
 ```
 
 ## License

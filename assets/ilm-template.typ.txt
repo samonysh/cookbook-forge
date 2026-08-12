@@ -1,0 +1,93 @@
+// ilm-template.typ.txt
+//
+// 基于 ilm 模板的优化版 Typst 主文件模板。
+// 样式优化参考 graph-notes 项目的排版方案：
+//   - 中文字体：LXGW WenKai（霞鹜文楷）+ 回退字体栈
+//   - 代码字体：LXGW WenKai Mono + 回退
+//   - 行内代码：浅灰背景 + 圆角
+//   - 块级代码：浅灰背景 + 灰色边框 + 圆角
+//   - Callout 提示框：四色（蓝/橙/红/绿）左边框 + 浅色背景
+//   - 表格：booktabs 风格（粗顶线 + 细中线 + 粗底线）
+//   - 图片：70% 宽度居中 + caption
+//
+// 脚本读取时按纯文本处理，替换 __BOOK_TITLE__ 等占位符。
+// 后缀 .typ.txt 以兼容 SkillHub 文件类型白名单。
+
+#import "@preview/ilm:2.1.1": *
+
+// ---------- 中文字体配置 ----------
+#set text(
+  lang: "zh",
+  font: ("LXGW WenKai", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif),
+  size: 12pt,
+)
+
+// ---------- ilm 模板配置 ----------
+#show: ilm.with(
+  title: [__BOOK_TITLE__],
+  authors: "__BOOK_AUTHOR__",
+  date: datetime.today(),
+  abstract: [__BOOK_ABSTRACT__],
+  bibliography: none,
+  figure-index: (enabled: true, title: "插图索引"),
+  table-index: (enabled: true, title: "表格索引"),
+  listing-index: (enabled: true, title: "代码索引"),
+)
+
+// ---------- 代码块样式优化 ----------
+// 行内代码：浅灰背景 + 小圆角
+#show raw.where(block: false): box.with(
+  fill: luma(240),
+  inset: (x: 3pt, y: 0pt),
+  outset: (y: 3pt),
+  radius: 2pt,
+)
+
+// 块级代码：浅灰背景 + 灰色边框 + 圆角 + 内边距
+#show raw.where(block: true): block.with(
+  fill: luma(245),
+  stroke: 1pt + rgb("#444"),
+  inset: 10pt,
+  radius: 4pt,
+)
+
+// 代码字体
+#show raw: set text(
+  font: ("LXGW WenKai Mono", "DejaVu Sans Mono", "Source Code Pro", "Consolas", monospace),
+  size: 11pt,
+)
+
+// ---------- Callout 提示框定义 ----------
+// 四色提示框：蓝（本章地图）、橙（Recipe）、红（陷阱）、绿（核心要点）
+#let callout-colors = (
+  blue:   (fill: rgb("#eff6ff"), stroke: rgb("#3b82f6"), icon: "\u{1f4d8}"),
+  orange: (fill: rgb("#fffbeb"), stroke: rgb("#f59e0b"), icon: "\u{1f373}"),
+  red:    (fill: rgb("#fef2f2"), stroke: rgb("#ef4444"), icon: "\u{26a0}\u{fe0f}"),
+  green:  (fill: rgb("#f0fdf4"), stroke: rgb("#22c55e"), icon: "\u{2705}"),
+)
+
+#let callout-box(color-key, title-text) = {
+  let c = callout-colors.at(color-key, default: callout-colors.blue)
+  let full-title = if title-text == "" or title-text == none {
+    c.icon
+  } else {
+    c.icon + " " + title-text
+  }
+  return block(
+    fill: c.fill,
+    stroke: (left: 4pt + c.stroke, top: 0.5pt + luma(220), bottom: 0.5pt + luma(220), right: 0.5pt + luma(220)),
+    inset: 12pt,
+    radius: 4pt,
+    width: 100%,
+    spacing: 1em,
+  )[
+    #set text(size: 11pt)
+    #text(weight: "bold", fill: c.stroke)[#full-title]
+    #v(0.5em)
+  ]
+}
+
+// ---------- 章节内容 ----------
+// 各章节通过 #include 引入
+
+__CHAPTER_INCLUDES__
