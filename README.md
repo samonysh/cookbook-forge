@@ -13,6 +13,16 @@
   先生成章节化 MDX，再转换为 ElegantBook PDF、Nextra 网站、优化 EPUB、Typst PDF。
 </p>
 
+<p align="center">
+  <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.3.0"><img src="https://img.shields.io/badge/version-1.3.0-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
+</p>
+
+<p align="center">
+  <code>npx skills add samonysh/cookbook-forge</code>
+</p>
+
 ---
 
 ## 这是什么
