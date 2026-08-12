@@ -10,7 +10,7 @@
 
 <p align="center">
   From multi-source materials to chapterized MDX, then ElegantBook PDF,<br>
-  Nextra website, and optimized EPUB — all in O'Reilly CookBook and Springer Handbook style.
+  Nextra website, optimized EPUB, and Typst PDF - all in O'Reilly CookBook and Springer Handbook style.
 </p>
 
 ---
@@ -29,14 +29,16 @@ It consolidates the core capabilities of three pre-existing Skills:
 
 - 📚 Generates CookBooks / handbooks / surveys on any technical domain
 - 🔍 Multi-source research: web scraping (including sitemaps), GitHub repos, arxiv papers, PDF OCR, EPUB unpacking, local source/docs, web search
+- 🔍 **Paper search**: supports `paper-search` (MCP) to search 20+ sources (arXiv, PubMed, Semantic Scholar, etc.)
 - 🏛️ Architecture-first: produces a full map and chapter outline, aligns with the user, then writes chapter-by-chapter
 - 📝 MDX as the canonical intermediate format: one `.mdx` per chapter for easy conversion to any downstream format
 - 🎨 Rich figures: mermaid / plantuml / drawio / excalidraw / chart, chosen based on user preference
-- 📖 Three output formats (combinable):
+- 📖 Four output formats (combinable):
   - **MDX** (default): chapterized Markdown + JSX, the source format
   - **ElegantBook LaTeX + PDF**: built on [ElegantLaTeX/ElegantBook](https://github.com/ElegantLaTeX/ElegantBook), compiled with xelatex
   - **Nextra v3 website**: built on [Nextra](https://nextra.site), with dark mode, full-text search, i18n, KaTeX, one-click Vercel/Docker deploy
   - **Optimized EPUB**: subset-embedded LXGW WenKai, booktabs tables, tcolorbox-style code blocks, compatible with legacy e-readers
+  - **Typst PDF**: built on [ilm](https://typst.app/universe/package/ilm) template, LXGW WenKai CJK fonts, four-color callout boxes, booktabs tables, rounded code blocks
 - 🌏 Auto-generates bilingual (Chinese/English) README for the produced book project
 
 ## When to Use
@@ -56,37 +58,38 @@ cookbook-forge/
 ├── README.md                             # Chinese readme
 ├── README.en.md                          # English readme (this file)
 ├── scripts/
-│   ├── mdx2tex.mjs                       # MDX → ElegantBook LaTeX converter
-│   ├── word-count.mjs                    # Word count (CJK chars + English words)
-│   ├── build-epub.mjs                    # MDX → EPUB full build (XHTML + OPF/NCX/NAV + CSS + ZIP)
-│   ├── epub-zip.mjs                      # EPUB-compliant packager (Node built-in zlib, zero deps)
-│   ├── subset-fonts.mjs                  # Font subsetting (JS via fonteditor-core → WOFF2; Python fallback hint)
-│   ├── optimize-formula-images.mjs       # Formula-as-image HTML repair (pure-JS regex)
-│   └── kroki-render.mjs                  # PlantUML remote rendering via Kroki.io
+│   ├── lib/
+│   │   ├── diagram-renderer.mjs          # Unified diagram rendering pipeline (mermaid/plantuml -> Kroki SVG)
+│   │   └── mdx-utils.mjs                 # MDX frontmatter parser
+│   ├── lmdx2tex.mjs                      # LLM-driven MDX -> ElegantBook LaTeX converter
+│   ├── lmdx2typst.mjs                    # LLM-driven MDX -> Typst (ilm template) converter
+│   ├── lbuild-epub.mjs                   # LLM-driven MDX -> EPUB3 converter
+│   ├── render-diagrams.mjs               # Diagram renderer (mermaid/plantuml -> SVG)
+│   ├── word-count.mjs                    # Word count
+│   ├── epub-zip.mjs                      # EPUB-compliant packager
+│   ├── subset-fonts.mjs                  # Font subsetting
+│   ├── optimize-formula-images.mjs       # Formula image repair
+│   ├── kroki-render.mjs                  # PlantUML Kroki rendering
+│   └── build-skill.mjs                   # Skill packaging script
 ├── references/
 │   ├── style-guide-oreilly.md            # O'Reilly CookBook style reference
-│   └── style-guide-springer.md           # Springer Handbook style reference
+│   ├── style-guide-springer.md           # Springer Handbook style reference
+│   ├── stage-5a-mdx.md                   # Stage 5a: MDX output sub-process
+│   ├── stage-5b-latex.md                 # Stage 5b: LaTeX + PDF sub-process
+│   ├── stage-5c-nextra.md                # Stage 5c: Nextra site sub-process
+│   ├── stage-5d-epub.md                  # Stage 5d: EPUB sub-process
+│   └── stage-5e-typst.md                 # Stage 5e: Typst sub-process
 └── assets/
-    ├── logo/                             # Brand logo (SVG / PNG / favicon)
-    ├── diagrams/                         # Skill architecture / workflow / use-case diagrams
+    ├── prompts/
+    │   ├── mdx-to-latex.md               # MDX->LaTeX conversion prompt
+    │   ├── mdx-to-epub.md                # MDX->EPUB XHTML conversion prompt
+    │   └── mdx-to-typst.md               # MDX->Typst conversion prompt
     ├── template-mdx/
     │   └── chapter-template.mdx          # Per-chapter MDX template
-    ├── nextra-template/                  # Nextra site scaffold (copy to use)
-    │   ├── package.json
-    │   ├── next.config.mjs
-    │   ├── theme.config.tsx
-    │   ├── middleware.js
-    │   ├── Dockerfile
-    │   ├── docker-compose.yml
-    │   ├── pages/
-    │   ├── components/
-    │   ├── styles/globals.css
-    │   └── scripts/
-    │       ├── render-plantuml.mjs       # Batch render PlantUML via Docker
-    │       ├── build-meta.mjs            # Auto-generate _meta.ts
-    │       ├── renumber-content.mjs      # Cross-chapter reference renumbering
-    │       └── scaffold-nextra.mjs       # Placeholder substitution & MDX copy
-    ├── stylesheet.template.css           # EPUB base CSS (bilingual/CJK optimization)
+    ├── nextra-template/                  # Nextra site scaffold
+    ├── elegantbook-main.template.tex.txt # ElegantBook LaTeX template
+    ├── ilm-template.typ.txt              # Typst ilm template (optimized styles)
+    ├── stylesheet.template.css           # EPUB base CSS
     └── stylesheet.formula-image.css      # CSS for formula-as-image EPUBs
 ```
 
@@ -111,11 +114,12 @@ Phase 1  Research         → URLs / GitHub / arxiv / PDF / EPUB / local / web �
 Phase 2  Outline          → big picture + TOC → metadata/outline.md ⚠️ must get user approval
 Phase 3  Chapter MDX      → one .mdx per chapter: intro / map / theory / practice / Recipes / pitfalls / key points / see-also
 Phase 4  Word count       → expand via Recipes / source analysis / lookup tables / appendices until target met
-Phase 5  Format conversion
+Phase 5  Format conversion (sub-agent checks & fixes after each format)
   5a.  MDX               (default)
-  5b.  ElegantBook       → xelatex (two passes) → PDF
-  5c.  Nextra site       → npm run build + Docker verification
-  5d.  EPUB              → font subsetting + CSS rewrite + Python packaging
+  5b.  ElegantBook       -> xelatex (two passes) -> PDF
+  5c.  Nextra site       -> npm run build + Docker verification
+  5d.  EPUB              -> font subsetting + CSS rewrite + Python packaging
+  5e.  Typst             -> ilm template + typst compile -> PDF
 Phase 6  Delivery         → bilingual README + links + statistics report
 ```
 
@@ -127,11 +131,13 @@ Orchestrated on demand:
 
 - `agent-browser` / `vivaldi-automation` — web scraping and sitemap traversal
 - `WebFetch` / `WebSearch` — web content fetching
-- `arxiv-watcher` / `connected-papers-browser` — paper retrieval
+- `arxiv-watcher` / `connected-papers-browser` - paper retrieval
+- `paper-search` (MCP) - paper search (arXiv, PubMed, Semantic Scholar, 20+ sources)
 - `doc2x-cli` — PDF OCR / parsing
 - `gh-cli` — GitHub repo reading
 - `plantuml` / `drawio` / `excalidraw` / `chart-visualization` — diagram generation
-- `elegantbook-latex` — LaTeX typography optimization
+- `elegantbook-latex` - LaTeX typography optimization
+- Typst CLI (for Typst PDF, only when Typst output is requested)
 - Node.js ≥ 18.17 (Nextra build / EPUB packaging / font subsetting)
 - Optional: `fonteditor-core` (`npm install fonteditor-core` for font subsetting; if missing, script prints install hint + Python fonttools fallback)
 - Docker (for PlantUML rendering and Nextra deployment verification)
@@ -151,6 +157,8 @@ Before delivery:
 - [ ] PDF: xelatex builds clean; cover 1280×1024 non-empty; no Markdown residue
 - [ ] Nextra: `npm run build` passes; Docker healthy; `/zh` returns 200
 - [ ] EPUB: mimetype first & STORED; fonts subset-embedded; CSS effective
+- [ ] Typst: typst compile zero errors; no Markdown/LaTeX syntax residue; CJK fonts configured
+- [ ] Diagrams: source preserved in diagrams-src/, rendered output in figures/
 
 ## Publishing to SkillHub
 
