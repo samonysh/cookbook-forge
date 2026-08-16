@@ -63,15 +63,29 @@ LLM 转换 vs 脚本转换的优势：
 - `mimetype` 第一个条目且 STORED（不压缩）
 - 其他文件 DEFLATE 压缩
 
-### 7. 自检
+### 7. 并行质量检查（check ⇄ fix，≤3 轮）
 
+使用 `scripts/epub-check.mjs`（与 Typst/LaTeX 流程同模式，以章节为单位并行暴露全部问题）：
+
+```bash
+node scripts/epub-check.mjs --project epub --fix
+```
+
+- **静态 lint + XML 良构校验**（`scripts/lib/epub-lint.mjs`，纯 JS 零依赖）：标签配对/交叉嵌套、属性引号、未转义 `&`、裸 `<`（这是阅读器能否打开的**硬闸门**，等价于编译检查）；Markdown 标题/粗体、JSX `className` 残留、图片文件存在性；跳过 `<pre>/<code>` 内容
+- **`--fix` 安全修复**：`className` -> `class`、裸 `&` -> `&amp;`、`**x**` -> `<strong>x</strong>`（保护代码段后修复再还原）
+- **包结构检查**：content.opf manifest/spine 完整性（资源未登记/引用缺失）、nav.xhtml 存在、book.epub 的 mimetype 第一且 STORED
+- 规则修不掉的按章对照 MDX 原文交给子 agent 修，复查：`node scripts/epub-check.mjs --project epub --only <slug>`
+- 全部通过后重跑 `node scripts/lbuild-epub.mjs` 重新打包
+
+### 8. 自检（已由 epub-check.mjs 自动覆盖）
+
+- [ ] `epub-check.mjs --fix` 退出码 0（每章 XML 良构 + 包结构全通过）
 - [ ] `mimetype` 是第一个条目且 STORED
 - [ ] `z.read("mimetype") == b"application/epub+zip"`
 - [ ] 所有图片/字体/章节均在 manifest 中
 - [ ] 章节在 spine 中顺序正确
-- [ ] XHTML 文件均为合法 XML
 
-### 8. 质量检查与修复（子 agent）
+### 9. 收尾抽查（子 agent）
 
 生成完成后，使用 Task 工具启动子 agent 检查所有输出文件：
 - 检查 mimetype 第一且 STORED、所有图片/字体/章节在 manifest 中

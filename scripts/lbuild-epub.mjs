@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { parseFrontmatter } from "./lib/mdx-utils.mjs";
 import { extractDiagramBlocks, renderAll, replaceBlocks } from "./lib/diagram-renderer.mjs";
+import { lintXhtml } from "./lib/epub-lint.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -109,7 +110,7 @@ for (const entry of mdxEntries) {
     });
     for (const r of results) {
       try {
-        await fs.copyFile(r.svgAbsPath, path.join(imgDir, r.svgFileName));
+        await fs.copyFile(r.svgAbsPath, path.join(OEBPS, "Images", r.svgFileName));
       } catch {}
     }
     mdxForLlm = replaceBlocks(raw, results, (r) => {
@@ -460,6 +461,24 @@ try {
 
 // ---------- 输出结构化任务清单（供 TRAE agent 编排）----------
 const planPath = path.join(outDir, ".conversion-plan.json");
+
+// ---------- 对已转换章节做快速静态 lint（零依赖，含 XML 良构） ----------
+const lintSummary = {};
+let lintErrTotal = 0;
+for (const c of chapterFiles) {
+  if (pendingTasks.some((p) => p.slug === c.id)) continue;
+  let text;
+  try {
+    text = await fs.readFile(path.join(OEBPS, c.href), "utf8");
+  } catch {
+    continue;
+  }
+  const issues = lintXhtml(text, { fileName: c.id, oebpsDir: OEBPS });
+  const errs = issues.filter((i) => i.severity === "error");
+  lintErrTotal += errs.length;
+  if (issues.length > 0) lintSummary[c.id] = issues;
+}
+
 const plan = {
   format: "epub",
   bookTitle: BOOK_TITLE,
@@ -469,6 +488,7 @@ const plan = {
   cached: chapterFiles
     .filter(c => !pendingTasks.some(p => p.slug === c.id))
     .map(c => ({ slug: c.id, file: c.f, title: c.title, href: c.href })),
+  lintIssues: lintSummary,
   instructions: pendingTasks.length
     ? [
         "For each task in `pending`, invoke a Task/sub-agent with these instructions:",
@@ -476,11 +496,25 @@ const plan = {
         "  2. Convert the MDX chapter to EPUB3 XHTML per those rules.",
         "  3. Write ONLY the complete XHTML document to `outputFile` (no markdown fences, no prose).",
         "  4. Output must start with `<?xml` and have <h1>chapter title</h1> as the first element in <body>.",
-        "After all tasks complete, re-run `node lbuild-epub.mjs` to regenerate content.opf/nav.xhtml and re-zip book.epub.",
+        "After all tasks complete:",
+        "  5. Run `node scripts/epub-check.mjs --project epub --fix` for per-chapter lint + XML well-formedness + package structure; fix remaining errors from `_lint_report.json`/`_check_report.json` (check<->fix loop, max 3 rounds).",
+        "  6. Re-run `node lbuild-epub.mjs` to regenerate content.opf/nav.xhtml and re-zip book.epub.",
       ]
-    : ["All chapters already converted; book.epub is ready."],
+    : ["All chapters already converted; book.epub is ready.",
+       "Run `node scripts/epub-check.mjs --project epub --fix` to validate chapters and package structure."],
 };
 await fs.writeFile(planPath, JSON.stringify(plan, null, 2), "utf8");
+
+if (Object.keys(lintSummary).length > 0) {
+  console.log(`\n━━━ 静态 lint（已转换章节） ━━━`);
+  for (const [slug, issues] of Object.entries(lintSummary)) {
+    const e = issues.filter((i) => i.severity === "error").length;
+    console.log(`  [${e ? "FAIL" : "warn"}] ${slug}: ${issues.length} 个问题（${e} error）`);
+    for (const i of issues.slice(0, 3)) console.log(`         ${i.line}  [${i.rule}] ${i.message}`);
+    if (issues.length > 3) console.log(`         ... 另有 ${issues.length - 3} 个`);
+  }
+  console.log(`  共 ${lintErrTotal} 个 error。修复：node scripts/epub-check.mjs --project epub --fix`);
+}
 
 // ---------- 清理临时 prompt 文件（仅对已缓存章节）----------
 for (const c of chapterFiles) {
