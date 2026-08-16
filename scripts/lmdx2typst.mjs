@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { parseFrontmatter } from "./lib/mdx-utils.mjs";
 import { extractDiagramBlocks, renderAll, replaceBlocks } from "./lib/diagram-renderer.mjs";
+import { lintText } from "./lib/typst-lint.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -126,8 +127,8 @@ ${mdxForLlm}
 
 ---
 
-请立即开始转换。只输出 Typst 代码，不要任何解释。输出文件第一行必须是 = 开头的章标题。
-注意：mermaid/plantuml 代码块已被预处理为 ![caption](/figures/diagram-<hash>.svg) 图片语法，请把这些图片转换为 #figure(image("figures/<svg-file>", width: 70%), caption: [...]) 语法，不要保留 mermaid 源码。`;
+请立即开始转换。只输出 Typst 代码，不要任何解释。输出文件第一行必须是 #import "../callout.typ": callout-box，第二行必须是 = 开头的章标题。
+注意：mermaid/plantuml 代码块已被预处理为 ![caption](/figures/diagram-<hash>.svg) 图片语法，请把这些图片转换为 #figure(image("../figures/<svg-file>", width: 70%), caption: [...]) 语法（路径必须是 ../figures/，因为章节文件在 chapters/ 子目录下），不要保留 mermaid 源码。`;
 
   const promptFile = path.join(chaptersDir, `._prompt_${slug}.txt`);
   await fs.writeFile(promptFile, prompt, "utf8");
@@ -141,8 +142,9 @@ ${mdxForLlm}
   let typstContent = null;
   try {
     typstContent = await fs.readFile(typstOutputPath, "utf8");
-    // Typst 章节文件以 = 开头（标题）
-    if (!typstContent.trim().startsWith("=")) {
+    // Typst 章节文件以 #import（callout 模块）或 = （标题）开头
+    const t = typstContent.trim();
+    if (!t.startsWith("=") && !t.startsWith("#import")) {
       typstContent = null;
     } else {
       console.log(`  ✓ 使用缓存结果`);
@@ -160,7 +162,7 @@ ${mdxForLlm}
       outputFile: typstOutputPath,
       slug,
       title,
-      validation: { mustStartWith: "=" },
+      validation: { mustStartWith: ["=", "#import"] },
     });
 
     const placeholder = `// LLM_CONVERSION_PENDING: ${f}
@@ -169,6 +171,8 @@ ${mdxForLlm}
 // Output file: ${typstOutputPath}
 //
 // After filling this file, re-run: node lmdx2typst.mjs
+#import "../callout.typ": callout-box
+
 = ${title}
 
 // [LLM output will replace this block]
@@ -200,10 +204,16 @@ try {
 }
 
 // ---------- 生成 main.typ ----------
-console.log("\n━━━ 生成 main.typ ━━━");
+console.log("\n━━━ 生成 main.typ + callout.typ ━━━");
 
 const mainTemplatePath = path.join(SKILL_ROOT, "assets", "ilm-template.typ.txt");
 let mainTemplate = await fs.readFile(mainTemplatePath, "utf8");
+
+// Callout 模块独立成文件：Typst 的 #include 不继承 main.typ 的 #let 作用域，
+// 章节文件通过 `#import "../callout.typ": callout-box` 自行引入。
+const calloutTemplatePath = path.join(SKILL_ROOT, "assets", "ilm-callout.typ.txt");
+const calloutTemplate = await fs.readFile(calloutTemplatePath, "utf8");
+await fs.writeFile(path.join(typstDir, "callout.typ"), calloutTemplate, "utf8");
 
 const includes = chapterRefs.map(c => `#include "chapters/${c.slug}.typ"`).join("\n");
 
@@ -217,6 +227,24 @@ await fs.writeFile(path.join(typstDir, "main.typ"), mainTemplate, "utf8");
 
 // ---------- 输出结构化任务清单（供 TRAE agent 编排）----------
 const planPath = path.join(typstDir, ".conversion-plan.json");
+
+// ---------- 对已转换章节做快速静态 lint（零依赖，秒级） ----------
+const lintSummary = {};
+let lintErrTotal = 0;
+for (const c of chapterRefs) {
+  if (pendingTasks.some((p) => p.slug === c.slug)) continue;
+  let text;
+  try {
+    text = await fs.readFile(c.typstPath, "utf8");
+  } catch {
+    continue;
+  }
+  const issues = await lintText(text, { fileName: c.slug, projectDir: typstDir });
+  const errs = issues.filter((i) => i.severity === "error");
+  lintErrTotal += errs.length;
+  if (issues.length > 0) lintSummary[c.slug] = issues;
+}
+
 const plan = {
   format: "typst",
   bookTitle: BOOK_TITLE,
@@ -226,6 +254,7 @@ const plan = {
   cached: chapterRefs
     .filter(c => !pendingTasks.some(p => p.slug === c.slug))
     .map(c => ({ slug: c.slug, file: c.f, title: c.title, typstPath: c.typstPath })),
+  lintIssues: lintSummary,
   instructions: pendingTasks.length
     ? [
         "For each task in `pending`, invoke a Task/sub-agent with these instructions:",
@@ -233,11 +262,26 @@ const plan = {
         "  2. Convert the MDX chapter to Typst per those rules.",
         "  3. Write ONLY raw Typst code to `outputFile` (no markdown fences, no prose).",
         "  4. First line must be `= Chapter Title` (Typst heading).",
-        "After all tasks complete, re-run `node lmdx2typst.mjs` to regenerate main.typ with final content.",
+        "After all tasks complete:",
+        "  5. Re-run `node scripts/lmdx2typst.mjs` to regenerate main.typ with final content.",
+        "  6. Run `node scripts/typst-check.mjs --project typst --fix` to auto-fix known Typst math rules (LaTeX residue, bare CJK/acronyms in math, missing # prefixes).",
+        "  7. Run `node scripts/typst-check.mjs --project typst --compile` for per-chapter parallel probe compilation; fix remaining errors from `_check_report.json` (check<->fix loop, max 3 rounds).",
       ]
-    : ["All chapters already converted; main.typ is ready for typst compile."],
+    : ["All chapters already converted; main.typ is ready for typst compile.",
+       "Run `node scripts/typst-check.mjs --project typst --fix --compile` to validate."],
 };
 await fs.writeFile(planPath, JSON.stringify(plan, null, 2), "utf8");
+
+if (Object.keys(lintSummary).length > 0) {
+  console.log(`\n━━━ 静态 lint（已转换章节） ━━━`);
+  for (const [slug, issues] of Object.entries(lintSummary)) {
+    const e = issues.filter((i) => i.severity === "error").length;
+    console.log(`  [${e ? "FAIL" : "warn"}] ${slug}: ${issues.length} 个问题（${e} error）`);
+    for (const i of issues.slice(0, 3)) console.log(`         ${i.line}  [${i.rule}] ${i.message}`);
+    if (issues.length > 3) console.log(`         ... 另有 ${issues.length - 3} 个`);
+  }
+  console.log(`  共 ${lintErrTotal} 个 error。修复：node scripts/typst-check.mjs --project typst --fix --compile`);
+}
 
 // ---------- 清理临时 prompt 文件（仅对已缓存章节） ----------
 for (const c of chapterRefs) {
@@ -263,6 +307,7 @@ if (pendingTasks.length > 0) {
   console.log(`\n✓ 所有章节已转换完成。`);
 }
 console.log(`\n编译方法:`);
+console.log(`  0. 检查与自动修复（推荐）: node scripts/typst-check.mjs --project typst --fix --compile`);
 console.log(`  1. 安装 Typst CLI: https://github.com/typst/typst/releases`);
 console.log(`  2. cd typst && typst compile main.typ`);
 console.log(`  3. 或使用 Typst Web App: https://typst.app/`);

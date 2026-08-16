@@ -1,0 +1,43 @@
+// ilm-callout.typ.txt
+//
+// Callout 提示框独立模块（四色：蓝/橙/红/绿）。
+// 独立成模块的原因：Typst 的 #include 不继承包含者的词法作用域，
+// main.typ 里的 #let callout-box 对 chapters/*.typ 不可见（unknown variable）。
+// 章节文件须在首行 `#import "../callout.typ": callout-box` 后使用。
+// 用法（尾部内容块作为第三个参数，直接跟在调用后）：
+//   #callout-box("blue", "本章地图")[
+//     - 要点 1
+//     - 要点 2
+//   ]
+//
+// 脚本 lmdx2typst.mjs 会把本文件写入 typst/callout.typ。
+// 后缀 .typ.txt 以兼容 SkillHub 文件类型白名单，脚本读取时按纯文本处理。
+
+#let callout-colors = (
+  blue:   (fill: rgb("#eff6ff"), stroke: rgb("#3b82f6"), icon: "\u{1f4d8}"),
+  orange: (fill: rgb("#fffbeb"), stroke: rgb("#f59e0b"), icon: "\u{1f373}"),
+  red:    (fill: rgb("#fef2f2"), stroke: rgb("#ef4444"), icon: "\u{26a0}\u{fe0f}"),
+  green:  (fill: rgb("#f0fdf4"), stroke: rgb("#22c55e"), icon: "\u{2705}"),
+)
+
+#let callout-box(color-key, title-text, body) = {
+  let c = callout-colors.at(color-key, default: callout-colors.blue)
+  let full-title = if title-text == "" or title-text == none {
+    c.icon
+  } else {
+    c.icon + " " + title-text
+  }
+  block(
+    fill: c.fill,
+    stroke: (left: 4pt + c.stroke, top: 0.5pt + luma(220), bottom: 0.5pt + luma(220), right: 0.5pt + luma(220)),
+    inset: 12pt,
+    radius: 4pt,
+    width: 100%,
+    spacing: 1em,
+  )[
+    #set text(size: 11pt)
+    #text(weight: "bold", fill: c.stroke)[#full-title]
+    #v(0.5em)
+    #body
+  ]
+}

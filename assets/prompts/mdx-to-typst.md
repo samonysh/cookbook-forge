@@ -10,13 +10,16 @@
 
 ### 1. 文件结构
 
-输出纯 Typst 代码（不含 markdown 围栏标记）。第一行必须是：
+输出纯 Typst 代码（不含 markdown 围栏标记）。文件必须以如下两行开头：
 
 ```typst
+#import "../callout.typ": callout-box
 = <从 frontmatter title 字段提取的中文标题>
 ```
 
-不要输出 YAML frontmatter，不要输出 `---` 分隔线。
+**为什么需要首行 import**：Typst 的 `#include` 不继承 main.typ 的词法作用域，`callout-box()` 函数必须由章节文件自行导入（工程根目录已由脚本生成 `callout.typ` 模块）。
+
+不要输出 YAML frontmatter，不要输出 `---` 分隔线。除首行 import 外，其余位置不要再写 `#import`。
 
 ### 2. 标题映射
 
@@ -32,22 +35,25 @@
 
 ### 3. Callout 卡片（`<div className="callout TYPE">`）
 
-将 JSX `<div className="callout X">...</div>` 转为 Typst 自定义块。使用 `#block()` 函数创建带颜色的提示框：
+将 JSX `<div className="callout X">...</div>` 转为 `callout-box()` 调用（函数已在首行 import）。内容作为尾部内容块参数直接跟在调用之后：
+
+```typst
+#callout-box("blue", "本章地图")[
+  - 第一节：概念引入
+  - 第二节：核心原理
+]
+```
 
 | className | Typst 代码 |
 |---|---|
-| `chapteroutline` | `#block(callout-box("blue", "本章地图")[...内容...])` |
-| `recipe` | `#block(callout-box("orange", "Recipe")[...内容...])` |
-| `pitfall` | `#block(callout-box("red", "陷阱")[...内容...])` |
-| `keypoints` | `#block(callout-box("green", "核心要点")[...内容...])` |
+| `chapteroutline` | `#callout-box("blue", "本章地图")[...内容...]` |
+| `recipe` | `#callout-box("orange", "Recipe")[...内容...]` |
+| `pitfall` | `#callout-box("red", "陷阱")[...内容...]` |
+| `keypoints` | `#callout-box("green", "核心要点")[...内容...]` |
 
-callout 内部的标题（如 `#### 📘 本章地图`）提取为标题参数，不再单独输出。callout 内部的列表、段落、代码块都需要正确转换为 Typst 语法。
+callout 内部的标题（如 `#### 📘 本章地图`）提取为标题参数，不再单独输出。callout 内部的列表、段落、代码块都需要正确转换为 Typst 语法（嵌套内容缩进在 `[...]` 内）。
 
-**颜色映射**：
-- blue: `fill: rgb("#eff6ff"), stroke: rgb("#3b82f6")`
-- orange: `fill: rgb("#fffbeb"), stroke: rgb("#f59e0b")`
-- red: `fill: rgb("#fef2f2"), stroke: rgb("#ef4444")`
-- green: `fill: rgb("#f0fdf4"), stroke: rgb("#22c55e")`
+**注意**：不要在 `callout-box()` 外再包一层 `#block()`（内容块已是函数的第三个参数，多余包裹会报 unexpected argument）。
 
 ### 4. 代码块
 
@@ -100,39 +106,86 @@ Typst 使用原生数学模式，**不要使用 LaTeX 语法**（禁止 `$$...$$
 - 极限：`$lim_(x -> oo) f(x)$`
 - 积分：`$integral_0^1 f(x) dif x$`
 
+#### 5.1 数学模式官方语法判据（编译错误的根因，必须遵守）
+
+以下规则来自 Typst 官方文档（typst.app/docs），违反任何一条都会编译报错：
+
+**（a）数学块内的中文与英文缩写必须加双引号**。数学模式中裸词被解释为变量相乘/函数调用，`unknown variable` 错误的头号根因：
+- 错误：`$损失 = f(x)$`、`$AIC$`、`$iid$` ❌（裸中文/裸缩写）
+- 正确：`$"损失" = f(x)$`、`$"AIC"$`、`$"iid"$` ✅
+- 多字母英文词组同理必须加引号：`"argmin"`、`"rank"`、`"span"`
+
+**（b）数学调用（`op(...)`、`mat(...)`、`lr(...)` 等）的布尔/数字/元组参数必须带 `#` 前缀**。官方规定数学调用参数列表内仍是数学模式，只有字符串可以裸写：
+- `op("lim", limits: #true)`（不是 `limits: true`，后者把 true 当三个变量相乘）
+- `mat(1, 0, 1; augment: #2)`、`mat(..., delim: #("(", ")")`、`delim: #none`
+- 字符串例外可直接写：`vec(1, 2, delim: "[")`
+
+**（c）多字母下标是"多个变量"语义**。下标里放多字母会被当成名为该字符串的变量：
+- `Z_(ij)` ❌（找不到变量 ij）-> `Z_(i j)` ✅（空格分隔两个变量）
+- 或整体加引号：`x_"max"` ✅
+- 复杂上下标一律括号包裹：`x_(i,j)`、`2^(1+i)`
+
+**（d）预定义操作符直接写，不加引号不用 op()**：
+`arccos arcsin arctan cos cosh cot coth csc csch ctg deg det dim exp gcd lcm hom id im inf ker lg lim liminf limsup ln log max min mod Pr sec sech sin sinc sinh sup tan tanh tg tr`
+- `$max(x, y)$`、`$lim_(n->oo) a_n$` 直接可写。
+
+**（e）微分算子是 `dif`，不是 `diff`/`d`**：`$(dif P)/(dif Q)$`、`$integral_0^1 f(x) dif x$`。
+
+**（f）点/省略号等易错符号**：
+- 乘法点 `dot.c`（不是 `cdot`）；居中省略号 `dots.c`（不是 `cdots`）；二阶导 `dot.double(x)`（不是 `ddot`）
+- 角括号直接写 Unicode `⟨ ⟩`（不要写 `langle`/`rangle`）
+- 远小于/远大于 `<<` / `>>`（不是 `ll`/`gg`）；叉乘 `times`（不是 `xx`）
+- 矩阵函数是 `mat()`（0.14+，**不是 `matrix()`**）
+
+**（g）underbrace/overbrace 的注释是第二个位置参数**（无命名参数）：
+- `$ underbrace(0 + 1 + dots.c + n, n + 1 "numbers") $` ✅
+- `underbrace(a, label: b)` ❌
+- body 含逗号时整体括号：`underbrace((W_2, X), := U_k)`
+
+**（h）`\overset{d}{\to}` 用 attach**：`$ attach(->, t: d) $`（t: 顶部标注）。
+
+**（i）`\left(...\right)` 定界符直接删掉**：Typst 语法匹配的定界符自动缩放，`$ [a, b/2] $`、`abs(x)`、`norm(x)` 现成可用。
+
+**（j）正文中的字面 `*`（如章节号 `N.M*` 选读标记）必须转义为 `N.M\*`**，否则按强调语法配对报 unclosed delimiter。货币美元符同样转义 `\$`。
+
 **MDX 中的 LaTeX 公式转换**：
 - `$E=mc^2$`（行内）-> `$E=mc^2$`（直接保留，Typst 兼容）
 - `$$T: f \mapsto f'$$`（块级）-> `$ T: f |-> f' $`
 - `\frac{a}{b}` -> `frac(a, b)`
 - `\sum_{i=0}^{n}` -> `sum_(i=0)^n`
-- `\mathbb{R}` -> `RR`
+- `\prod_{t}` -> `product_(t)`
+- `\mathbb{R}` / `\mathbb{E}` / `\mathbb{P}` -> `RR` / `EE` / `PP`
 - `\Rightarrow` -> `=>`
-- `\rightarrow` -> `->`
+- `\rightarrow` / `\to` -> `->`
 - `\neq` -> `!=`
 - `\leq` -> `<=`
 - `\geq` -> `>=`
 - `\in` -> `in`
+- `\notin` -> `in.not`
 - `\times` -> `times`
-- `\cdot` -> `dot`
-- `\alpha` -> `alpha`
-- `\beta` -> `beta`
-- `\gamma` -> `gamma`
-- `\delta` -> `delta`
-- `\epsilon` -> `epsilon`
-- `\lambda` -> `lambda`
-- `\mu` -> `mu`
-- `\sigma` -> `sigma`
-- `\phi` -> `phi`
-- `\omega` -> `omega`
-- `\infty` -> `oo`
+- `\cdot` -> `dot.c`
+- `\cdots` -> `dots.c`
 - `\partial` -> `partial`
+- `\sim` -> `~`（注意 `~` 在数学模式是分布符号，正文里是不换行空格）
+- `\approx` -> `approx`
+- `\equiv` -> `equiv`
+- `\perp` -> `bot`
+- `\infty` -> `oo`
 - `\nabla` -> `nabla`
 - `\forall` -> `forall`
 - `\exists` -> `exists`
-- `\det` -> `op("det")`
-- `\max` -> `op("max")`
-- `\min` -> `op("min")`
+- `\alpha` `\beta` `\gamma` `\delta` `\epsilon` `\lambda` `\mu` `\sigma` `\phi` `\omega` 等希腊字母 -> 同名小写（`alpha`、`beta`…）
+- `\dot{x}` / `\ddot{x}` -> `dot(x)` / `dot.double(x)`
+- `\hat{X}` / `\tilde{\mu}` / `\bar{\lambda}` -> `hat(X)` / `tilde(mu)` / `bar(lambda)`
+- `\mathcal{F}` -> `cal(F)`
+- `\langle f, g \rangle` -> `⟨ f, g ⟩`（Unicode）
+- `\circ` -> `∘`（Unicode）
+- `\|x\|` / `|x|` -> `norm(x)` / `abs(x)`
+- `\begin{matrix}a&b\\c&d\end{matrix}` -> `mat(a, b; c, d)`
+- `\det` -> `det`（预定义 op 直接写）
+- `\max` / `\min` -> `max` / `min`（预定义 op 直接写）
 - `\text{...}` -> `"..."`
+- `\left(` / `\right)` -> 直接删除（自动缩放）
 
 ### 6. 表格（GFM 表格）
 
@@ -171,12 +224,13 @@ Markdown 图片 `![alt](src)` 转为 Typst figure：
 
 ```typst
 #figure(
-  image("figures/<basename>", width: 70%),
+  image("../figures/<basename>", width: 70%),
   caption: [<alt 文本>],
 )
 ```
 
-- 只取 `src` 的文件名（basename），路径固定为 `figures/xxx.svg`
+- **路径必须是 `../figures/<文件名>`**：章节文件位于 `chapters/` 子目录，Typst 的相对路径按书写处所在文件解析，`figures/...` 会解析到 `chapters/figures/`（不存在）导致编译失败
+- 只取 `src` 的文件名（basename），目录固定为 `../figures/`
 - 宽度统一使用 `70%`（可根据图片类型调整）
 - caption 文本保留原文，去掉"图 N-M"前缀如果已经在 alt 中
 - 如果图片是已渲染的 mermaid/plantuml 图表，同样使用此格式
@@ -273,3 +327,17 @@ Markdown 图片 `![alt](src)` 转为 Typst figure：
 7. **不要输出 ```typst 围栏标记**，直接输出 Typst 代码
 8. 代码块内容必须完全保留（包括注释、空行、中文注释）
 9. **严禁使用 LaTeX 语法**（如 `$$...$$`、`\frac{}{}`、`\begin{}` 等），必须使用 Typst 原生语法
+
+## 输出前自查清单（逐条核对后再输出）
+
+- [ ] 无 `$$`（Markdown 块级公式）、无 `\frac` `\left` `\tau` 等 LaTeX 命令残留（全文搜索 `\` + 字母 零命中，代码块内部除外）
+- [ ] 无 Markdown 语法残留：`#` 开头标题、`**粗体**`、`| --- |` 表格、`[文字](url)` 链接
+- [ ] 首行是 `#import "../callout.typ": callout-box`，其后紧跟 `= 章标题`
+- [ ] Callout 用 `#callout-box("颜色", "标题")[内容]`，没有多余的 `#block()` 包裹
+- [ ] 块级公式 `$` 内侧有空格，行内公式 `$` 内侧无空格
+- [ ] 数学块内无裸中文、无裸缩写（全部已加双引号）
+- [ ] 无 `diff`（应为 `dif`）、`cdot`（应为 `dot.c`）、`cdots`（应为 `dots.c`）、`matrix(`（应为 `mat(`）、`langle`/`rangle`（应为 `⟨`/`⟩`）
+- [ ] 数学调用参数无漏 `#`：`limits: #true`、`augment: #2`、`delim: #("(", ")")`
+- [ ] 图片路径是 `../figures/<文件名>`，不是 `figures/<文件名>`
+- [ ] 表格使用 `table()` + `table.hline()`，无 Markdown 表格残留
+- [ ] 代码块三反引号语法正确，内部内容原样保留未转义
