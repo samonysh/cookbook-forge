@@ -70,10 +70,16 @@ cookbook-forge/
 ├── scripts/
 │   ├── lib/
 │   │   ├── diagram-renderer.mjs          # Unified diagram rendering pipeline (mermaid/plantuml -> Kroki SVG)
-│   │   └── mdx-utils.mjs                 # MDX frontmatter parser
+│   │   ├── mdx-utils.mjs                 # MDX frontmatter parser
+│   │   ├── latex-lint.mjs                # LaTeX lint/fix rules
+│   │   ├── epub-lint.mjs                 # EPUB XHTML lint/fix + XML well-formedness rules
+│   │   └── typst-lint.mjs                # Typst lint/fix rules
 │   ├── lmdx2tex.mjs                      # LLM-driven MDX -> ElegantBook LaTeX converter
+│   ├── latex-check.mjs                   # LaTeX lint + rule fixes + per-chapter parallel probe compiles
 │   ├── lmdx2typst.mjs                    # LLM-driven MDX -> Typst (ilm template) converter
+│   ├── typst-check.mjs                   # Typst lint + rule fixes + per-chapter parallel probe compiles
 │   ├── lbuild-epub.mjs                   # LLM-driven MDX -> EPUB3 converter
+│   ├── epub-check.mjs                    # EPUB lint + per-chapter XML well-formedness + package checks
 │   ├── render-diagrams.mjs               # Diagram renderer (mermaid/plantuml -> SVG)
 │   ├── word-count.mjs                    # Word count
 │   ├── epub-zip.mjs                      # EPUB-compliant packager
@@ -164,9 +170,9 @@ Before delivery:
 - [ ] All figures have number, caption, in-text reference, and explanatory paragraph
 - [ ] Cross-chapter references are clickable links
 - [ ] Word target met, or gap explicitly documented
-- [ ] PDF: xelatex builds clean; cover 1280×1024 non-empty; no Markdown residue
+- [ ] PDF: `latex-check.mjs --fix --compile` exits 0; xelatex builds clean; cover 1280×1024 non-empty; no Markdown residue
 - [ ] Nextra: `npm run build` passes; Docker healthy; `/zh` returns 200
-- [ ] EPUB: mimetype first & STORED; fonts subset-embedded; CSS effective
+- [ ] EPUB: `epub-check.mjs --fix` exits 0 (per-chapter XML well-formed + package checks); mimetype first & STORED; fonts subset-embedded; CSS effective
 - [ ] Typst: typst compile zero errors; no Markdown/LaTeX syntax residue; CJK fonts configured
 - [ ] Diagrams: source preserved in diagrams-src/, rendered output in figures/
 
