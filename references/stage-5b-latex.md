@@ -44,15 +44,31 @@ main.tex 基于 ElegantBook 文档类，已优化：
 - 图形路径 `\graphicspath{{figures/}}`
 - 防止孤行寡行
 
-### 5. 编译
+### 5. 并行质量检查（check ⇄ fix，≤3 轮）
+
+使用 `scripts/latex-check.mjs`（与 Typst 流程同模式，以章节为单位并行暴露全部问题）：
+
+```bash
+node scripts/latex-check.mjs --project latex --fix --compile
+```
+
+- **静态 lint**（`scripts/lib/latex-lint.mjs`）：Markdown 标题/粗体/表格残留、环境配对（`\begin`/`\end`）、花括号平衡、图片文件存在性；跳过 verbatim/lstlisting 内容
+- **`--fix` 安全修复**：`**x**` -> `\textbf{x}`、`[text](url)` -> `\href{url}{text}`（跳过注释与代码块）
+- **`--compile` 每章 probe 并行编译**：为每章生成 probe.tex（复用 main.tex 导言 + `\input` 单章），并行 xelatex，N 章错误一次全部暴露（`_check_report.json`，含行号）
+- 规则修不掉的按章对照 MDX 原文交给子 agent 修，复查：`node scripts/latex-check.mjs --project latex --compile --only <slug>`
+
+**模板注意**：`elegantbook.cls` 已 `\RequirePackage[many]{tcolorbox}`，main.tex 中**禁止再** `\usepackage[...]{tcolorbox}`（option clash）；所需库用幂等的 `\tcbuselibrary{...}` 声明。
+
+### 6. 整书编译
 
 ElegantBook 文档类依赖 `elegantbook.cls`，需要先准备好 cls 文件：
 - **TeXLive/MiKTeX 用户**：`tlmgr install elegantbook`（或在 TeXLive Manager 中搜索安装）
-- **手动获取**：从 [ElegantLaTeX/elegantbook](https://github.com/ElegantLaTeX/ElegantBook) 下载 `elegantbook.cls`，复制到 `latex/` 目录
+- **手动获取**：从 [ElegantLaTeX/elegantbook](https://github.com/ElegantLaTeX/elegantbook) 下载 `elegantbook.cls`，复制到 `latex/` 目录
 - 准备好后运行：`cd latex && xelatex main.tex && xelatex main.tex`（两遍以生成目录/交叉引用）
 
-### 6. 质量闸门
+### 7. 质量闸门
 
+- [ ] `latex-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）
 - [ ] PDF 不得出现 Markdown 表格源码
 - [ ] 表格必须 LaTeX 环境，不得过挤
 - [ ] 代码块必须 tcolorbox/listings 样式
@@ -60,7 +76,7 @@ ElegantBook 文档类依赖 `elegantbook.cls`，需要先准备好 cls 文件：
 - [ ] 字数达标
 - [ ] LaTeX 可复现编译（零 error）
 
-### 7. 质量检查与修复（子 agent）
+### 8. 收尾抽查（子 agent）
 
 生成完成后，使用 Task 工具启动子 agent 检查所有输出文件：
 - 检查 LaTeX 编译零 error、PDF 无 Markdown 残留

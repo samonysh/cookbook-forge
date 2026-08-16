@@ -29,9 +29,10 @@
 \setlength{\tabcolsep}{5pt}
 
 % ==================== 代码块（listings + tcolorbox）====================
+% 注意：elegantbook.cls 已 \RequirePackage[many]{tcolorbox}，此处禁止再 \usepackage（option clash）。
+% [many] 已含 breakable/skins/listingsutf8；\tcbuselibrary 幂等，作兜底声明。
 \usepackage{listings}
-\usepackage[most]{tcolorbox}
-\tcbuselibrary{listingsutf8}
+\tcbuselibrary{listingsutf8,breakable,skins}
 
 \lstdefinestyle{cookbookcode}{
   basicstyle=\ttfamily\small,

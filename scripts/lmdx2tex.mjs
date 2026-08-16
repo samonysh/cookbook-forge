@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { parseFrontmatter } from "./lib/mdx-utils.mjs";
 import { extractDiagramBlocks, renderAll, replaceBlocks } from "./lib/diagram-renderer.mjs";
+import { lintText } from "./lib/latex-lint.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -241,6 +242,25 @@ await fs.writeFile(path.resolve("latex/main.tex"), mainTemplate, "utf8");
 // ---------- 输出结构化任务清单（供 TRAE agent 编排）----------
 // 保留 prompt 文件以便 agent 读取（不删除），并写一份 JSON 清单。
 const planPath = path.resolve("latex/.conversion-plan.json");
+
+// ---------- 对已转换章节做快速静态 lint（零依赖，秒级） ----------
+const latexRoot = path.resolve("latex");
+const lintSummary = {};
+let lintErrTotal = 0;
+for (const c of chapterRefs) {
+  if (pendingTasks.some((p) => p.slug === c.slug)) continue;
+  let text;
+  try {
+    text = await fs.readFile(c.texPath, "utf8");
+  } catch {
+    continue;
+  }
+  const issues = lintText(text, { fileName: c.slug, projectDir: latexRoot });
+  const errs = issues.filter((i) => i.severity === "error");
+  lintErrTotal += errs.length;
+  if (issues.length > 0) lintSummary[c.slug] = issues;
+}
+
 const plan = {
   format: "latex",
   bookTitle: BOOK_TITLE,
@@ -250,6 +270,7 @@ const plan = {
   cached: chapterRefs
     .filter(c => !pendingTasks.some(p => p.slug === c.slug))
     .map(c => ({ slug: c.slug, file: c.f, title: c.title, texPath: c.texPath })),
+  lintIssues: lintSummary,
   instructions: pendingTasks.length
     ? [
         "For each task in `pending`, invoke a Task/sub-agent with these instructions:",
@@ -257,11 +278,26 @@ const plan = {
         "  2. Convert the MDX chapter to ElegantBook LaTeX per those rules.",
         "  3. Write ONLY raw LaTeX code to `outputFile` (no markdown fences, no prose).",
         "  4. First line must be \\chapter{...} or \\chapter*{...}.",
-        "After all tasks complete, re-run `node lmdx2tex.mjs` to regenerate main.tex with final content.",
+        "After all tasks complete:",
+        "  5. Re-run `node lmdx2tex.mjs` to regenerate main.tex with final content.",
+        "  6. Run `node scripts/latex-check.mjs --project latex --fix` to auto-fix Markdown residue and get per-chapter lint report.",
+        "  7. Run `node scripts/latex-check.mjs --project latex --compile` for per-chapter parallel xelatex probe compilation; fix remaining errors from `_check_report.json` (check<->fix loop, max 3 rounds).",
       ]
-    : ["All chapters already converted; main.tex is ready for xelatex."],
+    : ["All chapters already converted; main.tex is ready for xelatex.",
+       "Run `node scripts/latex-check.mjs --project latex --fix --compile` to validate."],
 };
 await fs.writeFile(planPath, JSON.stringify(plan, null, 2), "utf8");
+
+if (Object.keys(lintSummary).length > 0) {
+  console.log(`\n━━━ 静态 lint（已转换章节） ━━━`);
+  for (const [slug, issues] of Object.entries(lintSummary)) {
+    const e = issues.filter((i) => i.severity === "error").length;
+    console.log(`  [${e ? "FAIL" : "warn"}] ${slug}: ${issues.length} 个问题（${e} error）`);
+    for (const i of issues.slice(0, 3)) console.log(`         ${i.line}  [${i.rule}] ${i.message}`);
+    if (issues.length > 3) console.log(`         ... 另有 ${issues.length - 3} 个`);
+  }
+  console.log(`  共 ${lintErrTotal} 个 error。修复：node scripts/latex-check.mjs --project latex --fix --compile`);
+}
 
 // ---------- 清理临时 prompt 文件（仅对已缓存章节） ----------
 for (const c of chapterRefs) {
@@ -287,5 +323,6 @@ if (pendingTasks.length > 0) {
   console.log(`\n✓ 所有章节已转换完成。`);
 }
 console.log(`\n编译方法:`);
+console.log(`  0. 检查与自动修复（推荐）: node scripts/latex-check.mjs --project latex --fix --compile`);
 console.log(`  1. 将 ElegantBook 的 elegantbook.cls 放入 latex/ 目录（TeXLive 用户已自带）`);
 console.log(`  2. cd latex && xelatex main.tex && xelatex main.tex`);
