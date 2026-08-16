@@ -70,10 +70,16 @@ cookbook-forge/
 ├── scripts/
 │   ├── lib/
 │   │   ├── diagram-renderer.mjs          # 统一图表渲染 pipeline（mermaid/plantuml -> Kroki SVG）
-│   │   └── mdx-utils.mjs                 # MDX frontmatter 解析工具
+│   │   ├── mdx-utils.mjs                 # MDX frontmatter 解析工具
+│   │   ├── latex-lint.mjs                # LaTeX lint/fix 规则库
+│   │   ├── epub-lint.mjs                 # EPUB XHTML lint/fix + XML 良构校验规则库
+│   │   └── typst-lint.mjs                # Typst lint/fix 规则库
 │   ├── lmdx2tex.mjs                      # LLM 驱动 MDX -> ElegantBook LaTeX 转换
+│   ├── latex-check.mjs                   # LaTeX 静态 lint + 规则修复 + 每章并行 probe 编译
 │   ├── lmdx2typst.mjs                    # LLM 驱动 MDX -> Typst（ilm 模板）转换
+│   ├── typst-check.mjs                   # Typst 静态 lint + 规则修复 + 每章并行 probe 编译
 │   ├── lbuild-epub.mjs                   # LLM 驱动 MDX -> EPUB3 转换
+│   ├── epub-check.mjs                    # EPUB 静态 lint + 每章 XML 良构校验 + 包结构检查
 │   ├── render-diagrams.mjs               # 图表渲染（mermaid/plantuml -> SVG）
 │   ├── word-count.mjs                    # 字数统计
 │   ├── epub-zip.mjs                      # EPUB 合规打包
@@ -99,6 +105,7 @@ cookbook-forge/
     ├── nextra-template/                  # Nextra 站点骨架
     ├── elegantbook-main.template.tex.txt # ElegantBook LaTeX 模板
     ├── ilm-template.typ.txt              # Typst ilm 模板（优化样式）
+    ├── ilm-callout.typ.txt               # callout-box 四色提示框独立模块
     ├── stylesheet.template.css           # EPUB 基础 CSS
     └── stylesheet.formula-image.css      # 公式图片型 EPUB CSS
 ```
@@ -164,10 +171,10 @@ cookbook-forge/
 - [ ] 图表有编号、标题、正文引用、说明段落
 - [ ] 跨章引用为可点击链接
 - [ ] 字数达标或明确说明缺口
-- [ ] PDF：xelatex 编译通过；封面 1280×1024 非空；无 Markdown 残留
+- [ ] PDF：`latex-check.mjs --fix --compile` 退出码 0；xelatex 编译通过；封面 1280×1024 非空；无 Markdown 残留
 - [ ] Nextra：`npm run build` 通过；Docker healthy；`/zh` 200
-- [ ] EPUB：mimetype 第一且 STORED；字体子集化嵌入；CSS 生效
-- [ ] Typst：typst compile 零 error；无 Markdown/LaTeX 语法残留；中文字体正确配置
+- [ ] EPUB：`epub-check.mjs --fix` 退出码 0（每章 XML 良构 + 包结构）；mimetype 第一且 STORED；字体子集化嵌入；CSS 生效
+- [ ] Typst：`typst-check.mjs --fix --compile` 退出码 0；typst compile 零 error；无 Markdown/LaTeX 语法残留；数学块内无裸中文/裸缩写；中文字体正确配置
 - [ ] 图表：原始源码保留在 diagrams-src/，渲染产物在 figures/
 
 ## 安装与发布
