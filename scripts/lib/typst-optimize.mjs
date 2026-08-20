@@ -303,6 +303,29 @@ export function convertChapterRefs(text, opts = {}) {
   // 标题行（“第 N 章”格式的章标题）不能被误当成正文引用转换
   const headingLines = new Set(parseHeadingLines(normalized).map((h) => h.line));
 
+  // 修复历史版本已生成但没有 token 分隔符的引用，例如
+  // `@ch-ch03-dsh给出`。已知 label 才做替换，避免改写普通 @ 文本。
+  const knownLabels = [...map.values()];
+  const labelEdits = [];
+  for (let lineNo = 0; lineNo < lines.length; lineNo++) {
+    if (rawMask[lineNo] || mathLines.has(lineNo + 1) || COMMENT_LINE_RE.test(lines[lineNo])) continue;
+    for (const label of knownLabels) {
+      const re = new RegExp(`@${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!#h\\(0pt\\))`, "g");
+      let hit;
+      while ((hit = re.exec(lines[lineNo])) !== null) {
+        // 下面的行级替换不依赖绝对偏移，避免同文本行时定位不稳定。
+        labelEdits.push({ lineNo, start: hit.index, end: hit.index + (`@${label}`).length, replacement: `@${label}#h(0pt)` });
+      }
+    }
+  }
+  if (labelEdits.length) {
+    const fixedLines = [...lines];
+    for (const e of labelEdits.sort((a, b) => b.lineNo - a.lineNo || b.start - a.start)) {
+      fixedLines[e.lineNo] = fixedLines[e.lineNo].slice(0, e.start) + e.replacement + fixedLines[e.lineNo].slice(e.end);
+    }
+    return convertChapterRefs(fixedLines.join("\n"), opts);
+  }
+
   const refRe = /第\s*(\d+)\s*章/g;
   const edits = [];
   const converted = [];
@@ -313,8 +336,11 @@ export function convertChapterRefs(text, opts = {}) {
     if (isInsideString(normalized, m.index)) continue;
     const label = map.get(Number(m[1]));
     if (!label) continue;
-    edits.push({ start: m.index, end: m.index + m[0].length, text: `@${label}` });
-    converted.push({ line, from: m[0].trim(), to: `@${label}` });
+    // Typst 的 @label 会继续吞并紧随其后的中文/字母，直到遇到分隔符。
+    // 用零宽 h(0pt) 终止 label token，避免「@ch-x建立术语」被解析成一个新 label。
+    const replacement = `@${label}#h(0pt)`;
+    edits.push({ start: m.index, end: m.index + m[0].length, text: replacement });
+    converted.push({ line, from: m[0].trim(), to: replacement });
   }
   if (!edits.length) return { text, converted };
   edits.sort((a, b) => b.start - a.start);

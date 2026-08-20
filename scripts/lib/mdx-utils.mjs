@@ -11,12 +11,19 @@ export function normalizeNewlines(raw) {
  *   key: "quoted value"  带引号（自动去引号）
  *   key:                 列表，后跟 "  - item" 行，收集为数组
  * @param {string} raw  MDX 原文
+ * @param {string} [sourceName="chapter.mdx"] 源文件名，用于无 frontmatter 时推断 slug/title
  * @returns {{ title: string, slug: string, fm: Record<string, string|string[]>, body: string }}
  */
-export function parseFrontmatter(raw) {
+export function parseFrontmatter(raw, sourceName = "chapter.mdx") {
   const normalized = normalizeNewlines(raw);
-  const m = normalized.match(/^---\n([\s\S]*?)\n---\n/);
-  if (!m) return { title: "Chapter", slug: "chapter", fm: {}, body: normalized };
+  // 只有紧随开头分隔线的内容像 YAML 键值时才视为 frontmatter。
+  // 这样不会把正文中的 `---` 或损坏的 frontmatter 块吞进元数据。
+  const m = normalized.match(/^---\n(?=[A-Za-z_][\w-]*:\s*)([\s\S]*?)\n---\n/);
+  if (!m) {
+    const slug = String(sourceName).replace(/\\/g, "/").split("/").pop().replace(/\.mdx$/i, "") || "chapter";
+    const h1 = normalized.match(/^#\s+(.+?)\s*#?\s*$/m);
+    return { title: h1?.[1]?.trim() || slug, slug, fm: {}, body: normalized };
+  }
 
   const fm = {};
   const lines = m[1].split("\n");
@@ -41,10 +48,13 @@ export function parseFrontmatter(raw) {
     }
   }
 
+  const body = normalized.slice(m[0].length);
+  const fallbackSlug = String(sourceName).replace(/\\/g, "/").split("/").pop().replace(/\.mdx$/i, "") || "chapter";
+  const h1 = body.match(/^#\s+(.+?)\s*#?\s*$/m);
   return {
-    title: (typeof fm.title === "string" && fm.title) || "Chapter",
-    slug: (typeof fm.slug === "string" && fm.slug) || "chapter",
+    title: (typeof fm.title === "string" && fm.title) || h1?.[1]?.trim() || fallbackSlug,
+    slug: (typeof fm.slug === "string" && fm.slug) || fallbackSlug,
     fm,
-    body: normalized.slice(m[0].length),
+    body,
   };
 }

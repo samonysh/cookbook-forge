@@ -1071,6 +1071,8 @@ export async function lintText(text, opts = {}) {
         const line = (normalized.slice(0, am.index).match(/\n/g) || []).length + 1;
         if (rawMask2[line - 1] || mathLines.has(line) || COMMENT_RE.test(lines[line - 1])) continue;
         if (isInsideString(normalized, am.index)) continue;
+        // `@scope/package` 是 Typst 正文中的 npm 包名，不是 @label 引用。
+        if (normalized[am.index + am[0].length] === "/") continue;
         if (!labelIndex.has(am[1])) {
           push(line, "error", "dangling-ref",
             `悬空引用 @${am[1]}：label 不存在（编译会报 "label does not exist"）`);

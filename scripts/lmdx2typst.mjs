@@ -173,7 +173,13 @@ const mdxEntries = [];
 for (const f of (await fs.readdir(mdxDir)).filter(f => f.endsWith(".mdx")).sort()) {
   const mdxPath = path.join(mdxDir, f);
   const raw = await fs.readFile(mdxPath, "utf8");
-  const fm = parseFrontmatter(raw);
+  const fm = parseFrontmatter(raw, f);
+  const inferred = f.match(/^ch(\d+)/i) || f.match(/^chapter[-_](\d+)/i);
+  const appendix = f.match(/^appendix[-_]([a-z])/i);
+  const inferredOrder = inferred ? Number(inferred[1])
+    : appendix ? 1000 + appendix[1].toLowerCase().charCodeAt(0) - 96
+    : /^index\./i.test(f) ? 0
+    : Number.MAX_SAFE_INTEGER;
   const chapNum = Number.parseInt(fm.fm.chapter, 10);
   mdxEntries.push({
     file: f,
@@ -182,7 +188,7 @@ for (const f of (await fs.readdir(mdxDir)).filter(f => f.endsWith(".mdx")).sort(
     title: fm.title,
     slug: fm.slug,
     fm: fm.fm,
-    order: Number.isFinite(chapNum) ? chapNum : Number.MAX_SAFE_INTEGER,
+    order: Number.isFinite(chapNum) ? chapNum : inferredOrder,
   });
 }
 mdxEntries.sort((a, b) => a.order - b.order || a.file.localeCompare(b.file));
@@ -261,9 +267,11 @@ ${mdxForLlm}
   let typstContent = null;
   try {
     typstContent = await fs.readFile(typstOutputPath, "utf8");
-    // Typst 章节文件以 #import（callout 模块）或 = （标题）开头
+    // 章节可能有合法的前置指令（例如 #divider()），不要求第一行必须是标题。
+    // 只拒绝本脚本自己的占位符，以及完全不像章节的缓存文件。
     const t = typstContent.trim();
-    if (!t.startsWith("=") && !t.startsWith("#import")) {
+    if (t.includes("LLM_CONVERSION_PENDING")
+      || (!t.includes('#import "../callout.typ"') && !/^={1,3}\s+\S/m.test(t))) {
       typstContent = null;
     } else {
       console.log(`  ✓ 使用缓存结果`);
