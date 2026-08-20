@@ -11,13 +11,13 @@
 //   ]
 //
 // 脚本 lmdx2typst.mjs 会把本文件写入 typst/callout.typ。
+// 配色由 assets/typst-default.config.json 的 callout.palette 生成（P1-4 配置驱动），
+// 脚本替换下方独立成行的调色板占位符（注释中不得出现该占位符字面量，
+// 否则 String.replace 会先命中注释导致真实占位符漏替换）。
 // 后缀 .typ.txt 以兼容 SkillHub 文件类型白名单，脚本读取时按纯文本处理。
 
 #let callout-colors = (
-  blue:   (fill: rgb("#eff6ff"), stroke: rgb("#3b82f6"), icon: "\u{1f4d8}"),
-  orange: (fill: rgb("#fffbeb"), stroke: rgb("#f59e0b"), icon: "\u{1f373}"),
-  red:    (fill: rgb("#fef2f2"), stroke: rgb("#ef4444"), icon: "\u{26a0}\u{fe0f}"),
-  green:  (fill: rgb("#f0fdf4"), stroke: rgb("#22c55e"), icon: "\u{2705}"),
+__CALLOUT_PALETTE__
 )
 
 #let callout-box(color-key, title-text, body) = {
