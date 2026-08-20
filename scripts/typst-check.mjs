@@ -24,6 +24,7 @@
 //      callout 类型名映射颜色键 + 缺失标题补全（P0 callout 健壮性）；
 //      label/引用是全局语义，pass 覆盖 chapters/ 下全部章节（不受 --only 影响）；
 //   3. 图片路径修正 figures/ -> ../figures/（存在时）。
+//   4. 主模板闸门：main.typ 必须使用 @preview/ilm；--fix 时自动重新组装。
 //
 // 产出：
 //   typst/_lint_report.json   lint 问题清单（供 agent 消费）
@@ -121,6 +122,45 @@ function readdirSyncSafe(p) {
   } catch {
     return [];
   }
+}
+
+// ---------- ilm 模板闸门与重新补充 ----------
+
+function hasIlmTemplate(mainTyp) {
+  return /(^|\n)\s*#import\s+"@preview\/ilm:[^"]+"\s*:\s*\*/m.test(mainTyp)
+    && /(^|\n)\s*#show:\s*ilm\.with\s*\(/m.test(mainTyp);
+}
+
+function extractMainString(mainTyp, key, fallback) {
+  const m = mainTyp.match(new RegExp(`${key}:\\s*"([^"]*)"`));
+  return m?.[1] || fallback;
+}
+
+/**
+ * 重新运行唯一的组装入口，恢复 main.typ/callout.typ，并保留已有章节内容。
+ * 不在这里复制 ilm 模板生成逻辑，避免修复路径与转换路径发生漂移。
+ */
+async function restoreIlmTemplate(mainTyp, manifest) {
+  const mdxDir = path.dirname(PROJECT) === process.cwd()
+    ? path.join(process.cwd(), "mdx")
+    : path.join(path.dirname(PROJECT), "mdx");
+  if (!existsSync(mdxDir)) {
+    throw new Error(`无法自动恢复 ilm 模板：未找到 ${mdxDir}`);
+  }
+
+  const title = manifest?.bookTitle || extractMainString(mainTyp, "title", "CookBook");
+  const author = extractMainString(mainTyp, "authors", "Cookbook Generator");
+  const converter = path.join(SKILL_ROOT, "scripts", "lmdx2typst.mjs");
+  const cwd = path.dirname(PROJECT);
+  await execFileAsync(process.execPath, [converter, "--title", title, "--author", author], {
+    cwd,
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  const repaired = await fs.readFile(path.join(PROJECT, "main.typ"), "utf8");
+  if (!hasIlmTemplate(repaired)) {
+    throw new Error("lmdx2typst.mjs 已执行，但生成的 main.typ 仍未使用 ilm 模板");
+  }
+  return repaired;
 }
 
 // ---------- main.typ 导言提取（模板 import + set/show，止于第一个 #include） ----------
@@ -329,6 +369,34 @@ async function main() {
   const ordinals = buildOrdinals(allFiles, manifest);
   console.log(`config: ${configSource || "(assets 默认配置未找到，按内置默认)"}\n`);
 
+  // ---------- 0.1 ilm 模板硬闸门 + 自动重新补充 ----------
+  const mainPath = path.join(PROJECT, "main.typ");
+  let mainTyp;
+  try {
+    mainTyp = await fs.readFile(mainPath, "utf8");
+  } catch {
+    mainTyp = "";
+  }
+  if (!hasIlmTemplate(mainTyp)) {
+    if (!OPT_FIX) {
+      console.error(
+        "错误：typst/main.typ 未检测到 ilm 模板。必须包含 `@preview/ilm:<version>` 导入和 `#show: ilm.with(...)`。\n" +
+        "请运行 `node scripts/typst-check.mjs --project typst --fix` 自动重新补充。"
+      );
+      process.exit(1);
+    }
+    console.log("━━━ 重新补充 ilm 模板 ━━━");
+    try {
+      mainTyp = await restoreIlmTemplate(mainTyp, manifest);
+      console.log("  ✓ 已依据 lmdx2typst.mjs 重新生成 main.typ（ilm）\n");
+    } catch (err) {
+      console.error(`错误：ilm 模板自动恢复失败：${err?.message || err}`);
+      process.exit(1);
+    }
+  } else {
+    console.log("ilm template: @preview/ilm + ilm.with ✓\n");
+  }
+
   const buildLabelIndex = async () => {
     const idx = new Set();
     for (const t of allFiles) {
@@ -488,7 +556,6 @@ async function main() {
     if (ver.includes("0.13")) {
       console.error("警告：typst 0.13 对 @preview/ilm >= 2.1 过旧（需 0.14+），如机器上有更新版本请用 --typst 指定\n");
     }
-    const mainTyp = await fs.readFile(path.join(PROJECT, "main.typ"), "utf8");
     const preamble = extractPreamble(mainTyp);
     // 各章全量 label 集合：用于过滤 probe 单章编译的跨章引用误报
     const labelSets = new Map();

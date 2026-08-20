@@ -175,6 +175,7 @@ cookbook-forge/
 - [ ] Nextra：`npm run build` 通过；Docker healthy；`/zh` 200
 - [ ] EPUB：`epub-check.mjs --fix` 退出码 0（每章 XML 良构 + 包结构）；mimetype 第一且 STORED；字体子集化嵌入；CSS 生效
 - [ ] Typst：`typst-check.mjs --fix --compile` 退出码 0；typst compile 零 error；无 Markdown/LaTeX 语法残留；数学块内无裸中文/裸缩写；中文字体正确配置
+- [ ] Typst：`main.typ` 包含 `@preview/ilm:<version>` 与 `#show: ilm.with(...)`；缺失时 `--fix` 可自动重新补充
 - [ ] 图表：原始源码保留在 diagrams-src/，渲染产物在 figures/
 
 ## 安装与发布

@@ -173,7 +173,7 @@ Before delivery:
 - [ ] PDF: `latex-check.mjs --fix --compile` exits 0; xelatex builds clean; cover 1280×1024 non-empty; no Markdown residue
 - [ ] Nextra: `npm run build` passes; Docker healthy; `/zh` returns 200
 - [ ] EPUB: `epub-check.mjs --fix` exits 0 (per-chapter XML well-formed + package checks); mimetype first & STORED; fonts subset-embedded; CSS effective
-- [ ] Typst: typst compile zero errors; no Markdown/LaTeX syntax residue; CJK fonts configured
+- [ ] Typst: typst compile zero errors; no Markdown/LaTeX syntax residue; CJK fonts configured; `main.typ` contains `@preview/ilm:<version>` and `#show: ilm.with(...)`, with `--fix` restoration when missing
 - [ ] Diagrams: source preserved in diagrams-src/, rendered output in figures/
 
 ## Publishing to SkillHub

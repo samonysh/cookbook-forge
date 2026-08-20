@@ -88,6 +88,12 @@ node scripts/lmdx2typst.mjs --title "书名" --author "作者"
 node scripts/typst-check.mjs --project typst --fix --compile
 ```
 
+检查器会把 ilm 模板作为硬闸门：`typst/main.typ` 必须同时包含
+`@preview/ilm:<version>` 导入和 `#show: ilm.with(...)`。如果已有项目的
+`main.typ` 被覆盖或损坏，带 `--fix` 运行时会重新调用 `lmdx2typst.mjs` 组装入口，
+依据现有 `mdx/` 与章节文件重新补充 `main.typ`/`callout.typ`；不带 `--fix` 则直接失败，
+避免不使用 ilm 的项目被误判为合格。
+
 三段能力：
 
 1. **静态 lint**（默认执行）：检查 Markdown/LaTeX 残留（`$$`、`\frac`、`#` 标题、`**粗体**`、Markdown 表格/链接）、数学块内裸中文/裸缩写、`diff`/`cdot`/`matrix` 等易错符号、数学调用参数漏 `#`、占位符残留、图片路径存在性、表格质量（hline 重复/越界、单元格数与列数一致性、长表格分页）、callout 健壮性（内容块 `[ ]` 闭合、颜色键合法、参数个数、嵌套警告）、章节引用完整性（正文「第 N 章」引用不存在的章号告警）、代码块质量（>60 字符长行溢出告警、正文裸 `@` 未转义）-> 写 `typst/_lint_report.json`
