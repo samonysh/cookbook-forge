@@ -131,6 +131,18 @@ function hasIlmTemplate(mainTyp) {
     && /(^|\n)\s*#show:\s*ilm\.with\s*\(/m.test(mainTyp);
 }
 
+function chapterFilesFromMain(mainTyp, availableFiles, chaptersDir) {
+  const available = new Set(availableFiles);
+  const included = [];
+  for (const m of mainTyp.matchAll(/^\s*#include\s+"chapters\/([^"/]+\.typ)"/gm)) {
+    const file = m[1];
+    if (available.has(file) && !included.includes(file)) included.push(file);
+  }
+  // 未组装/损坏的 main.typ 没有 include 时，保留原有排序作为诊断兜底。
+  const ordered = included.length ? included : [...availableFiles].sort();
+  return ordered.map((f) => ({ slug: f.replace(/\.typ$/, ""), path: path.join(chaptersDir, f) }));
+}
+
 function extractMainString(mainTyp, key, fallback) {
   const m = mainTyp.match(new RegExp(`${key}:\\s*"([^"]*)"`));
   return m?.[1] || fallback;
@@ -321,15 +333,11 @@ async function loadProjectContext() {
 
 /**
  * 章号映射（label 的 C 与模板 include 顺序一致）：
- * manifest.chapters[].ordinal 覆盖全部章节文件时用 manifest；否则按文件名排序推导（1 起）。
+ * 以 main.typ 的 include 顺序为准；manifest 仅作为配置来源，不覆盖实际渲染顺序。
  */
 function buildOrdinals(allFiles, manifest) {
-  const fromManifest = new Map();
-  for (const c of manifest?.chapters || []) {
-    if (typeof c.ordinal === "number" && c.slug) fromManifest.set(c.slug, c.ordinal);
-  }
-  const covered = allFiles.every((t) => fromManifest.has(t.slug));
-  if (covered) return fromManifest;
+  // main.typ 的 include 顺序是实际渲染顺序；manifest 可能来自旧版本或旧目录，
+  // 不能让它覆盖当前工程的真实顺序。
   const m = new Map();
   allFiles.forEach((t, i) => m.set(t.slug, i + 1));
   return m;
@@ -355,10 +363,15 @@ async function main() {
   }
 
   const only = ONLY ? new Set(ONLY.split(",").map((s) => s.trim())) : null;
-  const allFiles = files
-    .sort()
-    .map((f) => ({ slug: f.replace(/\.typ$/, ""), path: path.join(chaptersDir, f) }));
-  const targets = allFiles.filter((t) => !only || only.has(t.slug));
+  const mainPath = path.join(PROJECT, "main.typ");
+  let mainTyp;
+  try {
+    mainTyp = await fs.readFile(mainPath, "utf8");
+  } catch {
+    mainTyp = "";
+  }
+  let allFiles = chapterFilesFromMain(mainTyp, files, chaptersDir);
+  let targets = allFiles.filter((t) => !only || only.has(t.slug));
   if (targets.length === 0) {
     console.error("错误：--only 过滤后没有目标章节");
     process.exit(2);
@@ -370,13 +383,6 @@ async function main() {
   console.log(`config: ${configSource || "(assets 默认配置未找到，按内置默认)"}\n`);
 
   // ---------- 0.1 ilm 模板硬闸门 + 自动重新补充 ----------
-  const mainPath = path.join(PROJECT, "main.typ");
-  let mainTyp;
-  try {
-    mainTyp = await fs.readFile(mainPath, "utf8");
-  } catch {
-    mainTyp = "";
-  }
   if (!hasIlmTemplate(mainTyp)) {
     if (!OPT_FIX) {
       console.error(
@@ -388,6 +394,8 @@ async function main() {
     console.log("━━━ 重新补充 ilm 模板 ━━━");
     try {
       mainTyp = await restoreIlmTemplate(mainTyp, manifest);
+      allFiles = chapterFilesFromMain(mainTyp, files, chaptersDir);
+      targets = allFiles.filter((t) => !only || only.has(t.slug));
       console.log("  ✓ 已依据 lmdx2typst.mjs 重新生成 main.typ（ilm）\n");
     } catch (err) {
       console.error(`错误：ilm 模板自动恢复失败：${err?.message || err}`);
@@ -402,7 +410,8 @@ async function main() {
     for (const t of allFiles) {
       try {
         const text = await fs.readFile(t.path, "utf8");
-        for (const l of collectFigureLabels(text)) idx.add(l.label);
+        // dangling-ref 不只涉及图表，也涉及章节标题和用户自定义 label。
+        for (const l of collectAllLabels(text)) idx.add(l);
       } catch {}
     }
     return idx;
