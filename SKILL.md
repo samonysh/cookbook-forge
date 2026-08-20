@@ -64,18 +64,20 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `scripts/optimize-formula-images.mjs` - 公式即图片型 HTML 结构修复（纯 JS 正则替换）。
 - `scripts/lmdx2tex.mjs` - **LLM 驱动**的 MDX -> ElegantBook LaTeX 转换器。通过子 agent 逐章节调用 LLM 智能转换，避免正则的脆弱性。组装后自动对已转换章节做静态 lint，并生成 `_TODO_LATEX_FIX.md` 修复任务清单。
 - `scripts/latex-check.mjs` - LaTeX 工程质量检查 CLI：静态 lint（`_lint_report.json`）+ 安全规则自动修复（`--fix`）+ 每章独立 probe 并行 xelatex 编译（`--compile`，`_check_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/latex-lint.mjs`。
-- `scripts/lmdx2typst.mjs` - **LLM 驱动**的 MDX -> Typst（ilm 模板）转换器。通过子 agent 逐章节调用 LLM 智能转换为 Typst 原生语法。组装后自动对已转换章节做快速静态 lint。
-- `scripts/typst-check.mjs` - Typst 工程质量检查 CLI：静态 lint（`_lint_report.json`）+ 固化规则自动修复（`--fix`，只作用于数学块）+ 每章独立 probe 并行编译（`--compile`，`_check_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/typst-lint.mjs`（借鉴 pdf-to-typst-notes 的 compile_check.py / fix_common.py）。
+- `scripts/lmdx2typst.mjs` - **LLM 驱动**的 MDX -> Typst（ilm 模板）转换器。通过子 agent 逐章节调用 LLM 智能转换为 Typst 原生语法。排版规则（标题/图表编号、callout 调色板、字体）由 `assets/typst-default.config.json` 配置驱动（工作目录 `typst.config.json` 或 `--config` 可覆盖）。组装后自动对已转换章节做快速静态 lint。
+- `scripts/typst-check.mjs` - Typst 工程质量检查 CLI：静态 lint（`_lint_report.json`，含表格 hline 重复/越界/行列一致性、callout 闭合/颜色键/嵌套、章节引用完整性、代码块长行与裸 `@` 校验）+ 固化规则自动修复与确定性优化（`--fix`：数学块规则修复（含 `\oplus`/`\rightarrow` 等符号映射）+ 标题手动编号剥离 + figure label 自动注入 `<fig-C-S>`/`<tab-C-S>` + 纯文本图/表引用转 `@fig-C-S` 交叉引用 + 章节标题 label 注入 `<ch-<slug>>`/`<sec-<slug>-<seq>>` + 长表格注入 `breakable: true` + callout 类型名映射颜色键/补缺失标题，全部幂等）+ 每章独立 probe 并行编译（`--compile`，`_check_report.json`，错误经知识库映射附带 `suggestion`，跨章引用误报自动过滤），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/typst-lint.mjs` 与优化器 `scripts/lib/typst-optimize.mjs`（借鉴 pdf-to-typst-notes 的 compile_check.py / fix_common.py）。
 - `scripts/word-count.mjs` - 字数统计（GFM 表格按"表头+分隔行"块计数，不再虚高）。
 - `scripts/lbuild-epub.mjs` - **LLM 驱动**的 MDX -> EPUB3 转换器。通过子 agent 逐章节调用 LLM 智能转换为 XHTML，然后组装为 EPUB。组装后自动对已转换章节做静态 lint + XML 良构校验，并生成 `_TODO_EPUB_FIX.md` 修复任务清单。
 - `scripts/epub-check.mjs` - EPUB 工程质量检查 CLI：静态 lint + 每章 XML 良构校验（纯 JS 零依赖，`_lint_report.json`）+ 安全规则自动修复（`--fix`）+ 包结构检查（manifest/spine/nav/mimetype，`_check_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/epub-lint.mjs`。
+- `scripts/typst-fonts-check.mjs` - P1-4 字体可用性预检：运行 `typst fonts` 与配置 `fonts` 栈比对，报告缺失字体（编译前预检一次即可避免中文豆腐块）。
 - `scripts/kroki-render.mjs` - PlantUML 通过 Kroki.io 远程渲染（deflate+base64url 编码 GET，含隐私提示）。
 - `assets/prompts/mdx-to-latex.md` - LLM 转换 MDX->LaTeX 的系统 Prompt 模板（定义所有映射规则）。
 - `assets/prompts/mdx-to-epub.md` - LLM 转换 MDX->EPUB XHTML 的系统 Prompt 模板。
 - `assets/prompts/mdx-to-typst.md` - LLM 转换 MDX->Typst 的系统 Prompt 模板（定义 Typst 原生语法映射规则，严禁混用 LaTeX 语法）。
 - `assets/elegantbook-main.template.tex.txt` - 优化版 ElegantBook main.tex 模板（.tex.txt 后缀以兼容 SkillHub 文件类型白名单，脚本读取时按纯文本处理）。
 - `assets/ilm-template.typ.txt` - 优化版 Typst ilm 模板主文件（中文字体 LXGW WenKai、代码块圆角边框、booktabs 表格）。
-- `assets/ilm-callout.typ.txt` - Callout 提示框独立模块（四色蓝/橙/红/绿）。独立成文件的原因：Typst 的 `#include` 不继承 main.typ 的 `#let` 作用域，章节文件须首行 `#import "../callout.typ": callout-box`；lmdx2typst.mjs 会写入 `typst/callout.typ`。
+- `assets/ilm-callout.typ.txt` - Callout 提示框独立模块（四色蓝/橙/红/绿，调色板由配置生成）。独立成文件的原因：Typst 的 `#include` 不继承 main.typ 的 `#let` 作用域，章节文件须首行 `#import "../callout.typ": callout-box`；lmdx2typst.mjs 会写入 `typst/callout.typ`。
+- `assets/typst-default.config.json` - Typst 转换流水线默认配置（标题/图表编号规则、figure label 前缀、callout 调色板与类型映射、字体栈）。消费方：lmdx2typst.mjs（模板/callout/prompt 生成）、typst-check.mjs 与 typst-optimize.mjs（优化 pass）。项目级覆盖：工作目录 `typst.config.json` 或 `--config <path>`。
 - `assets/nextra-template/scripts/scaffold-nextra.mjs` - 把模板里的 `{{BOOK_SLUG}}`/`{{BOOK_TITLE}}`/`{{GITHUB_REPO_URL}}`/`{{YEAR}}` 占位符替换为真实值，自动拷贝 mdx->pages/zh、figures->public/figures、生成 pages/en 英文骨架。
 - `assets/stylesheet.template.css` / `assets/stylesheet.formula-image.css` - EPUB 样式表。
 - `assets/template-mdx/` - 单章 MDX 模板（含 `$$` 块级公式写法约定）。
@@ -388,13 +390,13 @@ references:
 
 详见 `references/stage-5e-typst.md`。
 
-从 `mdx/` 生成 Typst 工程，使用 **LLM 逐章节转换**流程：
+从 `mdx/` 生成 Typst 工程，使用 **LLM 逐章节转换**流程（排版规则由 `assets/typst-default.config.json` 配置驱动，项目可用工作目录 `typst.config.json` 覆盖）：
 1. 运行 `scripts/lmdx2typst.mjs --title "书名" --author "作者"` 初始化工程、生成 prompt 文件和占位符。
-2. 对每个 MDX 文件，使用 Task 工具启动子 agent，读取 `assets/prompts/mdx-to-typst.md` 转换规则，输出 `.typ` 章节文件（Typst 原生语法，严禁混用 LaTeX 语法；prompt 内含官方语法判据：数学内裸中文/缩写必须加引号、数学调用参数 `#` 前缀、`dif`/`dot.c`/`mat` 等符号纠错、输出前自查清单）。
-3. 重新运行 `scripts/lmdx2typst.mjs` 组装最终 `main.typ`（使用 ilm 模板，中文字体 LXGW WenKai、代码块圆角边框、四色 callout 提示框），同时自动 lint 已转换章节。
-4. 检查与修复循环（check ⇄ fix，≤3 轮）：`node scripts/typst-check.mjs --project typst --fix --compile`——静态 lint + 固化规则自动修复（数学块内 `\frac`->`frac()`、裸中文/缩写加引号、参数补 `#`、图片路径修正）+ 每章独立 probe 并行编译（N 章错误一次全部暴露，`_check_report.json`）；规则修不掉的按章交给子 agent 对照 MDX 原文修，复查 `--compile --only <slug>`。
+2. 对每个 MDX 文件，使用 Task 工具启动子 agent，读取 `assets/prompts/mdx-to-typst.md` 转换规则，输出 `.typ` 章节文件（Typst 原生语法，严禁混用 LaTeX 语法；标题**不写手动编号**——「第 C 章 / C.S / 图 C-S」由模板自动编号；prompt 内含官方语法判据：数学内裸中文/缩写必须加引号、数学调用参数 `#` 前缀、`dif`/`dot.c`/`mat` 等符号纠错、输出前自查清单）。
+3. 重新运行 `scripts/lmdx2typst.mjs` 组装最终 `main.typ`（使用 ilm 模板，中文字体 LXGW WenKai、代码块圆角边框、四色 callout 提示框，编号/调色板/字体按配置生成），同时自动 lint 已转换章节。
+4. 检查与修复循环（check ⇄ fix，≤3 轮）：`node scripts/typst-check.mjs --project typst --fix --compile`——静态 lint + 固化规则自动修复（数学块内 `\frac`->`frac()`、`\oplus`/`\rightarrow` 等符号映射、裸中文/缩写加引号、参数补 `#`、图片路径修正）+ 确定性优化器（剥离标题手动编号、为 figure 注入 `<fig-C-S>`/`<tab-C-S>` label、纯文本引用「图 C-S」转 `@fig-C-S` 交叉引用、为标题注入 `<ch-<slug>>`/`<sec-<slug>-<seq>>` label 并把「第 N 章」引用转 `@ch-<slug>`、超 `tables.splitThreshold` 行的长表格注入 `breakable: true`、callout 类型名映射颜色键并补缺失标题；全部幂等，label/引用 pass 覆盖全部章节以支持跨章引用）+ 每章独立 probe 并行编译（N 章错误一次全部暴露，`_check_report.json`，错误附带知识库 `suggestion`，跨章引用误报自动过滤）；规则修不掉的按章交给子 agent 对照 MDX 原文修，复查 `--compile --only <slug>`。若 PDF 中文变豆腐块，先跑 `node scripts/typst-fonts-check.mjs` 预检字体。
 5. 编译：`cd typst && typst compile main.typ`。
-6. **质量检查**：`typst-check.mjs --fix --compile` 退出码 0、无 Markdown/LaTeX 语法残留、数学公式使用 Typst 原生语法、表格使用 `table()` + `table.hline()`、中文字体正确配置、无残留占位符；修复发现的问题后重新编译验证。
+6. **质量检查**：`typst-check.mjs --fix --compile` 退出码 0、无 Markdown/LaTeX 语法残留、数学公式使用 Typst 原生语法、标题无手动编号双编号、figure 均有 label 且引用为交叉引用（无悬空引用）、表格使用 `table()` + `table.hline()`（hline 无重复/越界、长表已注入 `breakable: true`）、callout 颜色键合法且内容块 `[ ]` 闭合、章节标题有 `ch-`/`sec-` label 且章节引用无悬空、代码块无超长行/裸 `@`、中文字体正确配置、无残留占位符；修复发现的问题后重新编译验证。
 
 模板样式优化（基于 ilm 模板）：
 - 中文字体：LXGW WenKai + 回退栈
@@ -438,7 +440,7 @@ references:
 - [ ] 若输出 LaTeX/PDF：`latex-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；xelatex 两遍编译成功；封面 1280×1024 非空；PDF 无 Markdown 残留
 - [ ] 若输出 Nextra：`npm run build` 成功；Docker healthy；`/zh` 200；所有图表 200
 - [ ] 若输出 EPUB：`epub-check.mjs --fix` 退出码 0（每章 XML 良构 + 包结构全通过）；mimetype 第一且 STORED；字体子集化嵌入；代码块/表格样式生效
-- [ ] 若输出 Typst：`typst-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；typst compile 零 error；无 Markdown/LaTeX 语法残留；数学公式使用 Typst 原生语法、数学块内无裸中文/裸缩写、数学调用参数 `#` 前缀齐全；表格使用 table() + table.hline()；图片路径 `../figures/`；中文字体正确配置
+- [ ] 若输出 Typst：`typst-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；typst compile 零 error；无 Markdown/LaTeX 语法残留；数学公式使用 Typst 原生语法、数学块内无裸中文/裸缩写、数学调用参数 `#` 前缀齐全；标题无手动编号（模板自动编号，无双编号）；figure 均有 `<fig-C-S>`/`<tab-C-S>` label、引用为 `@fig-C-S` 交叉引用且无悬空引用；优化器幂等（重跑 `--fix` 零变更）；表格使用 table() + table.hline() 且 hline 无重复/越界、长表（> splitThreshold 行）已注入 `breakable: true`；callout 颜色键合法、内容块 `[ ]` 闭合、无嵌套 callout；章节标题有 `ch-`/`sec-` label、章节引用不指向不存在的章号；代码块无超长行/裸 `@`；图片路径 `../figures/`；字体预检通过；中文字体正确配置
 
 ---
 
@@ -482,6 +484,20 @@ references:
 | Typst 图片 file not found | 章节在 chapters/ 下，`figures/` 相对路径解析到 chapters/figures/ | 路径写 `../figures/<name>`；`--fix` 自动修正 |
 | Typst 中文显示豆腐块 | 未配置中文字体 | main.typ 中设置 `font: ("LXGW WenKai", "Noto Serif CJK SC", ...)` |
 | Typst 表格无横线 | 未使用 table.hline | 添加 `table.hline(y: 0, stroke: 1.2pt)` 顶线 + `table.hline(stroke: 0.6pt)` 中线 |
+| Typst 标题出现「第 1 章 第 1 章」双编号 | LLM 把 MDX 手动编号带进标题 + 模板自动编号 | 标题不写编号交给模板；`typst-check.mjs --fix` 优化器自动剥离手动编号（幂等） |
+| Typst 图号变「图 0-1」 | figure 编号用了 `counter("heading")`（字符串自定义计数器恒为 0） | 必须用元素类型 `counter(heading)`；模板已按此生成，勿手改 |
+| Typst probe 编译报跨章 `label does not exist` | 单章 probe 看不到其他章的 label | 已知误报，typst-check.mjs 自动过滤；引用本身勿改 |
+| Typst 正文引用不跳转/编号不同步 | 纯文本「图 1-2」而非交叉引用 | `typst-check.mjs --fix` 自动将「图 C-S/表 C-S」转为 `@fig-C-S`（label 存在时） |
+| Typst 报 `cannot place horizontal line` / hline 双线叠加 | `table.hline` 的 y 重复或超出总行数（合法 0..rows） | lint 规则 `table-hline-duplicate`/`table-hline-out-of-range` 定位行号；删多余 hline 或改 y |
+| Typst 长表格溢出页面 | table 没有 `split` 参数（分页开关是 `breakable`，0.14+），且 figure 默认不可断页 | `--fix` 为超阈值长表注入 `breakable: true`（阈值 `tables.splitThreshold`，默认 12）；模板已含 figure breakable show rule |
+| Typst callout 报 `expected closing bracket` | 内容块 `[ ]` 嵌套括号失衡未闭合 | lint `callout-unclosed` 定位行号，人工配平方括号 |
+| Typst callout 报 `missing argument: body` | 只传了颜色键一个参数，尾部内容块被误当 title-text | `--fix` 自动补标题参数（类型名场景补 `callout.types` 默认标题） |
+| Typst callout 报 `unknown variable: pitfall` | 颜色参数写了类型名而非调色板键（blue/orange/red/green） | `--fix` 按 `callout.types` 映射（pitfall→red、recipe→orange）；未知键报错不动，人工确认 |
+| Typst 章节引用章号写错 / 不跳转 | 正文「第 N 章」N 不在 include 顺序内，或未转 @ch-<slug> | `--fix` 自动转 `@ch-<slug>`（章标题行不被误转）；引用不存在的章号由 lint `chapter-ref` 兜底 |
+| Typst 正文裸 `@` 编译报错 | 普通 @ 未转义（Typst 中 @ 必跟 label 名） | 转义为 `\@`；lint `code-bare-at` 定位（邮箱等不误报） |
+| Typst 数学符号 `\oplus`/`\rightarrow`/`\geq` 报 unknown variable | 0.14+ 对 LaTeX 命令名支持不稳 | `--fix` 替换为 Typst 原生符号（⊕/→/≥），未覆盖的手写 Unicode |
+| Typst 编译错误定位慢 / 不知道咋改 | 裸看 raw 报错 | `_check_report.json` 每条错误带 `suggestion`（知识库映射） |
+| Typst 中文豆腐块 | 字体未装 / fallback 缺 | 先 `node scripts/typst-fonts-check.mjs` 预检字体栈，装缺失字体或调 fallback |
 | LaTeX 报 `Option clash for package tcolorbox` | `elegantbook.cls` 已 `\RequirePackage[many]{tcolorbox}`，main.tex 再 `\usepackage[...]{tcolorbox}` | 删除模板中的重复加载；所需库用幂等的 `\tcbuselibrary{...}` 声明 |
 | LaTeX/EPUB 整书检查一次只报一章的错，修复慢 | 串行整书检查 | `latex-check.mjs --compile` / `epub-check.mjs` 以章节为单位并行检查，N 章错误一次全暴露 |
 | EPUB 阅读器打不开/白屏 | XHTML 非 XML 良构（标签未闭合/未转义 `&`） | `epub-check.mjs` 每章良构校验定位行号；`--fix` 自动修裸 `&`/`className` |

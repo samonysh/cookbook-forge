@@ -1,0 +1,59 @@
+{
+  "$comment": [
+    "Typst 转换流水线默认配置（P1-4 配置驱动）。",
+    "消费方：lmdx2typst.mjs（加载并生成 main.typ/callout.typ/prompt 片段）、",
+    "typst-check.mjs（--fix 优化 pass + lint 规则开关）、scripts/lib/typst-optimize.mjs（确定性变换）。",
+    "项目级覆盖：在工作目录放 typst.config.json 或运行时传 --config <path>。",
+    "章号 C 取 main.typ 的 include 顺序（第 1 个被 include 的章 = 1），与渲染出的「第 C 章 / 图 C-S」天然一致。"
+  ],
+  "template": {
+    "name": "ilm",
+    "version": "2.1.1"
+  },
+  "headings": {
+    "autoNumber": true,
+    "level1Pattern": "第 {n} 章",
+    "numbering": "1.1",
+    "stripManualNumbers": true
+  },
+  "figures": {
+    "autoNumber": true,
+    "numbering": "1-1",
+    "supplement": "图",
+    "labelPrefix": "fig",
+    "autoLabel": true,
+    "stripCaptionPrefix": true,
+    "refSeparators": ["-", "–", "—"]
+  },
+  "tables": {
+    "autoNumber": true,
+    "numbering": "1-1",
+    "supplement": "表",
+    "labelPrefix": "tab",
+    "autoLabel": true,
+    "splitThreshold": 12
+  },
+  "listings": {
+    "supplement": "代码"
+  },
+  "callout": {
+    "palette": {
+      "blue":   { "fill": "#eff6ff", "stroke": "#3b82f6", "icon": "📘" },
+      "orange": { "fill": "#fffbeb", "stroke": "#f59e0b", "icon": "🍳" },
+      "red":    { "fill": "#fef2f2", "stroke": "#ef4444", "icon": "⚠️" },
+      "green":  { "fill": "#f0fdf4", "stroke": "#22c55e", "icon": "✅" }
+    },
+    "types": {
+      "chapteroutline": { "color": "blue",   "title": "本章地图" },
+      "recipe":         { "color": "orange", "title": "Recipe" },
+      "pitfall":        { "color": "red",    "title": "陷阱" },
+      "keypoints":      { "color": "green",  "title": "核心要点" }
+    }
+  },
+  "fonts": {
+    "text": ["LXGW WenKai", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", "serif"],
+    "code": ["LXGW WenKai Mono", "DejaVu Sans Mono", "Source Code Pro", "Consolas", "monospace"],
+    "textSize": "12pt",
+    "codeSize": "11pt"
+  }
+}

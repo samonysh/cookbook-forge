@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // typst-check.mjs
 //
-// Typst 工程质量检查 CLI：静态 lint + 固化规则自动修复 + 每章独立 probe 并行编译。
+// Typst 工程质量检查 CLI：静态 lint + 固化规则自动修复 + 确定性优化 + 每章独立 probe 并行编译。
 // 流程借鉴 pdf-to-typst-notes 的 compile_check.py / fix_common.py（check <--> fix 循环 <= 3 轮），
 // 移植为 Node 并与 lmdx2typst.mjs 产出的目录结构（typst/{main.typ, chapters/, figures/}）对齐。
 //
@@ -13,6 +13,17 @@
 //   node scripts/typst-check.mjs --project typst --fix            # 2) + 固化规则自动修复
 //   node scripts/typst-check.mjs --project typst --fix --compile  # 3) + 每章并行编译检查
 //   可选：--only ch01-overview,ch02-xxx  --jobs 6  --typst <path>  --keep（保留 _probe/）
+//         --config <path>（配置解析顺序：--config > typst/.typst-project.json 内嵌配置
+//                          > ./typst.config.json > assets/typst-default.config.json）
+//
+// --fix 的三个 pass（全部幂等）：
+//   1. 数学块固化规则（typst-lint.mjs fixText，只动数学块）；
+//   2. 确定性优化器（typst-optimize.mjs）：标题手动编号剥离（P0-1）、figure label 注入
+//      <fig-C-S>/<tab-C-S> 与 caption 前缀剥离、正文「图 C-S」引用转 @fig-C-S（P0-2）、
+//      长表格注入 breakable: true（P0 表格质量，阈值 tables.splitThreshold）、
+//      callout 类型名映射颜色键 + 缺失标题补全（P0 callout 健壮性）；
+//      label/引用是全局语义，pass 覆盖 chapters/ 下全部章节（不受 --only 影响）；
+//   3. 图片路径修正 figures/ -> ../figures/（存在时）。
 //
 // 产出：
 //   typst/_lint_report.json   lint 问题清单（供 agent 消费）
@@ -25,9 +36,19 @@ import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import os from "node:os";
 import path from "node:path";
-import { lintText, fixText } from "./lib/typst-lint.mjs";
+import { fileURLToPath } from "node:url";
+import { lintText, fixText, computeRawMask, errorSuggestion } from "./lib/typst-lint.mjs";
+import {
+  resolveTypstConfig,
+  collectFigureLabels,
+  convertFigureRefs,
+  convertChapterRefs,
+  optimizeChapter,
+} from "./lib/typst-optimize.mjs";
 
 const execFileAsync = promisify(execFile);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SKILL_ROOT = path.resolve(__dirname, "..");
 
 // ---------- CLI 参数 ----------
 
@@ -48,6 +69,7 @@ const OPT_KEEP = hasFlag("keep");
 const JOBS = Number.parseInt(getArg("jobs", "6"), 10);
 const ONLY = getArg("only", null);
 const TYPST_EXPLICIT = getArg("typst", null);
+const CONFIG_EXPLICIT = getArg("config", null);
 
 // ---------- typst 二进制探测（Windows 多版本共存时选可用的） ----------
 
@@ -135,6 +157,7 @@ function parseErrors(raw, typPath) {
       line: Number.parseInt(m[3], 10) || 0,
       col: Number.parseInt(m[4], 10) || 0,
       message: msg,
+      suggestion: errorSuggestion(msg),
     });
   }
   return errs;
@@ -144,9 +167,30 @@ function run(cmd, cmdArgs, opts) {
   return execFileAsync(cmd, cmdArgs, { timeout: 600000, maxBuffer: 32 * 1024 * 1024, ...opts });
 }
 
+// ---------- 全量 label 收集（跨章引用误报过滤用） ----------
+
+/**
+ * 收集一章内全部 `<label>`（跳过 raw 块与注释行）。
+ * probe 单章编译时，其他章定义的 label 在本文档中不存在，
+ * "label does not exist" 属固有误报；真悬空引用由 lint 的 dangling-ref 规则兜底。
+ */
+function collectAllLabels(text) {
+  const normalized = text.replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
+  const rawMask = computeRawMask(lines);
+  const labels = new Set();
+  const re = /<([a-zA-Z][a-zA-Z0-9_-]*)>/g;
+  for (let i = 0; i < lines.length; i++) {
+    if (rawMask[i] || /^\s*\/\//.test(lines[i])) continue;
+    let m;
+    while ((m = re.exec(lines[i])) !== null) labels.add(m[1]);
+  }
+  return labels;
+}
+
 // ---------- 每章 probe 并行编译 ----------
 
-async function compileCheck(typst, chaptersDir, preamble, targets) {
+async function compileCheck(typst, chaptersDir, preamble, targets, labelSets) {
   const probeDir = path.join(PROJECT, "_probe");
   await fs.mkdir(probeDir, { recursive: true });
   const results = new Map();
@@ -173,17 +217,82 @@ async function compileCheck(typst, chaptersDir, preamble, targets) {
         raw = `${e.stderr || ""}${e.stdout || ""}`;
       }
       let errs = parseErrors(raw, t.path);
-      if (code !== 0 && errs.length === 0) {
+      // probe 单章编译的固有误报：跨章 @ref 指向其他章的 label（本章文档中不存在）。
+      // 整书编译（main.typ 顺序 include 全部章）可正常解析；本章 label 报错、
+      // 或 label 全局不存在（真悬空，lint dangling-ref 兜底）不过滤。
+      let crossRefFP = 0;
+      if (errs.length > 0 && labelSets) {
+        const own = labelSets.get(t.slug) || new Set();
+        errs = errs.filter((e) => {
+          const lm = /^label `<([^>]+)>` does not exist/.exec(e.message);
+          if (!lm || own.has(lm[1])) return true;
+          const inOther = [...labelSets.values()].some((s) => s !== own && s.has(lm[1]));
+          if (inOther) { crossRefFP++; return false; }
+          return true;
+        });
+        if (crossRefFP > 0) {
+          console.log(`  [probe ] ${t.slug}: 跳过 ${crossRefFP} 处跨章引用误报（单章 probe 无法解析他章 label，整书编译可解析）`);
+        }
+      }
+      // raw 输出中的全部 error 都被判定为跨章误报时视为通过（exit code 由这些 error 引起）；
+      // 否则编译非零退出但解析不出错误时，保留原始首行作通用回退。
+      const rawErrTotal = (raw.match(/^error: /gm) || []).length;
+      const allFalsePositive = crossRefFP > 0 && errs.length === 0 && crossRefFP >= rawErrTotal;
+      if (code !== 0 && errs.length === 0 && !allFalsePositive) {
         const first = raw.split("\n").find((l) => l.trim()) || "unknown error";
         errs = [{ line: 0, col: 0, message: first }];
       }
       await fs.rm(pdfOut, { force: true });
-      results.set(t.slug, { ok: code === 0 && errs.length === 0, errs });
+      results.set(t.slug, { ok: errs.length === 0 && (code === 0 || allFalsePositive), errs });
     }
   });
   await Promise.all(workers);
   if (!OPT_KEEP) await fs.rm(probeDir, { recursive: true, force: true });
   return results;
+}
+
+// ---------- 配置与章号映射加载 ----------
+
+/**
+ * 配置解析：--config > typst/.typst-project.json 内嵌配置 > ./typst.config.json > assets 默认。
+ * .typst-project.json 由 lmdx2typst.mjs 写出（含生效配置与章节 ordinal 清单），
+ * 优先于 cwd 配置以保证与转换期使用的配置一致。
+ */
+async function loadProjectContext() {
+  const manifestPath = path.join(PROJECT, ".typst-project.json");
+  if (CONFIG_EXPLICIT) {
+    const r = await resolveTypstConfig(CONFIG_EXPLICIT, process.cwd(), SKILL_ROOT);
+    return { config: r.config, configSource: r.source, manifest: null };
+  }
+  if (existsSync(manifestPath)) {
+    try {
+      const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+      if (manifest?.config && typeof manifest.config === "object") {
+        return { config: manifest.config, configSource: `${manifestPath}#config`, manifest };
+      }
+      return { config: null, configSource: null, manifest };
+    } catch {
+      // manifest 损坏时走常规解析
+    }
+  }
+  const r = await resolveTypstConfig(null, process.cwd(), SKILL_ROOT);
+  return { config: r.config, configSource: r.source, manifest: null };
+}
+
+/**
+ * 章号映射（label 的 C 与模板 include 顺序一致）：
+ * manifest.chapters[].ordinal 覆盖全部章节文件时用 manifest；否则按文件名排序推导（1 起）。
+ */
+function buildOrdinals(allFiles, manifest) {
+  const fromManifest = new Map();
+  for (const c of manifest?.chapters || []) {
+    if (typeof c.ordinal === "number" && c.slug) fromManifest.set(c.slug, c.ordinal);
+  }
+  const covered = allFiles.every((t) => fromManifest.has(t.slug));
+  if (covered) return fromManifest;
+  const m = new Map();
+  allFiles.forEach((t, i) => m.set(t.slug, i + 1));
+  return m;
 }
 
 // ---------- 主流程 ----------
@@ -206,27 +315,55 @@ async function main() {
   }
 
   const only = ONLY ? new Set(ONLY.split(",").map((s) => s.trim())) : null;
-  const targets = files
+  const allFiles = files
     .sort()
-    .map((f) => ({ slug: f.replace(/\.typ$/, ""), path: path.join(chaptersDir, f) }))
-    .filter((t) => !only || only.has(t.slug));
+    .map((f) => ({ slug: f.replace(/\.typ$/, ""), path: path.join(chaptersDir, f) }));
+  const targets = allFiles.filter((t) => !only || only.has(t.slug));
   if (targets.length === 0) {
     console.error("错误：--only 过滤后没有目标章节");
     process.exit(2);
   }
 
-  // ---------- 1. lint ----------
-  let allIssues = [];
-  const fileIssues = new Map();
-  for (const t of targets) {
-    const text = await fs.readFile(t.path, "utf8");
-    const issues = await lintText(text, { fileName: t.slug, projectDir: PROJECT });
-    fileIssues.set(t.slug, issues);
-    allIssues = allIssues.concat(issues);
-  }
+  // ---------- 0. 配置 + 章号映射 + 跨章 label 索引 ----------
+  const { config, configSource, manifest } = await loadProjectContext();
+  const ordinals = buildOrdinals(allFiles, manifest);
+  console.log(`config: ${configSource || "(assets 默认配置未找到，按内置默认)"}\n`);
 
-  // ---------- 2. fix（固化规则，只动数学块） ----------
-  if (OPT_FIX && allIssues.some((i) => i.fixable)) {
+  const buildLabelIndex = async () => {
+    const idx = new Set();
+    for (const t of allFiles) {
+      try {
+        const text = await fs.readFile(t.path, "utf8");
+        for (const l of collectFigureLabels(text)) idx.add(l.label);
+      } catch {}
+    }
+    return idx;
+  };
+  const lintTargets = async () => {
+    const labelIndex = await buildLabelIndex();
+    let all = [];
+    const per = new Map();
+    for (const t of targets) {
+      const text = await fs.readFile(t.path, "utf8");
+      const issues = await lintText(text, {
+        fileName: t.slug,
+        projectDir: PROJECT,
+        config,
+        labelIndex,
+        labelIndexComplete: true,
+        chapterNumbers: new Set(ordinals.values()),
+      });
+      per.set(t.slug, issues);
+      all = all.concat(issues);
+    }
+    return { all, per };
+  };
+
+  // ---------- 1. lint ----------
+  let { all: allIssues, per: fileIssues } = await lintTargets();
+
+  // ---------- 2. fix（固化规则 + 确定性优化器） ----------
+  if (OPT_FIX) {
     console.log("━━━ 应用固化规则修复（只作用于数学块） ━━━\n");
     const hitsTotal = {};
     for (const t of targets) {
@@ -243,14 +380,70 @@ async function main() {
     const notes = Object.entries(hitsTotal).sort((a, b) => b[1] - a[1]);
     for (const [note, n] of notes) console.log(`  ${String(n).padStart(5)}  ${note}`);
     if (notes.length) console.log("");
-    // 修复后重新 lint，剩余问题进入报告
-    allIssues = [];
-    for (const t of targets) {
-      const text = await fs.readFile(t.path, "utf8");
-      const issues = await lintText(text, { fileName: t.slug, projectDir: PROJECT });
-      fileIssues.set(t.slug, issues);
-      allIssues = allIssues.concat(issues);
+
+    // 确定性优化器（P0-1 标题编号剥离 / P0-2 figure label 注入 + 引用转换 /
+    //              P0 长表格 breakable / P0 callout 颜色与标题修复）。
+    // label 与引用是跨章全局语义：sweep 覆盖 chapters/ 全部章节（不受 --only 影响），报告只看 targets。
+    console.log("━━━ 确定性优化器（标题编号 / figure label / 引用转换 / 长表格 / callout） ━━━\n");
+    const texts = new Map();
+    for (const t of allFiles) texts.set(t.slug, await fs.readFile(t.path, "utf8"));
+    const totals = {
+      headingsStripped: 0, labelsInjected: 0, captionsStripped: 0, refsConverted: 0,
+      tablesBreakable: 0, calloutFixes: 0, headingsLabelled: 0, chapterRefsConverted: 0,
+    };
+    const labelIndex = new Set();
+    // sweep 1：剥离标题手动编号 + 注入 figure label + 剥离 caption 自身编号前缀
+    //          + 注入标题 label（ch-<slug> / sec-<slug>-<seq>）
+    //          + 长表格注入 breakable + callout 颜色/标题修复
+    for (const t of allFiles) {
+      const r = optimizeChapter(texts.get(t.slug), {
+        chapterNumber: ordinals.get(t.slug) ?? null,
+        config,
+        fileSlug: t.slug,
+      });
+      texts.set(t.slug, r.text);
+      for (const l of r.labels) labelIndex.add(l.label);
+      totals.headingsStripped += r.changes.headingsStripped;
+      totals.labelsInjected += r.changes.labelsInjected;
+      totals.captionsStripped += r.changes.captionsStripped;
+      totals.tablesBreakable += r.changes.tablesBreakable;
+      totals.calloutFixes += r.changes.calloutColorsFixed + r.changes.calloutTitlesInserted;
+      totals.headingsLabelled += r.changes.headingsLabelled;
     }
+    // sweep 2：正文「图 C-S / 表 C-S」纯文本引用 -> @label（仅 label 存在时）
+    for (const t of allFiles) {
+      const r = convertFigureRefs(texts.get(t.slug), { labelIndex, config });
+      texts.set(t.slug, r.text);
+      totals.refsConverted += r.converted.length;
+    }
+    // sweep 3：正文「第 N 章」纯文本引用 -> @ch-<slug>（章号 -> 一级标题 label 映射）
+    const numToLabel = new Map();
+    for (const t of allFiles) {
+      const n = ordinals.get(t.slug);
+      if (n != null) numToLabel.set(n, `ch-${t.slug}`);
+    }
+    for (const t of allFiles) {
+      const r = convertChapterRefs(texts.get(t.slug), { numToLabel });
+      texts.set(t.slug, r.text);
+      totals.chapterRefsConverted += r.converted.length;
+    }
+    // 写回（内容有变化才写，保证幂等）
+    for (const t of allFiles) {
+      const cur = await fs.readFile(t.path, "utf8");
+      if (texts.get(t.slug) !== cur) {
+        await fs.writeFile(t.path, texts.get(t.slug), "utf8");
+        console.log(`  [optimized] ${t.slug}`);
+      }
+    }
+    console.log(
+      `  剥离手动编号标题 ${totals.headingsStripped} 个；注入 figure label ${totals.labelsInjected} 个；` +
+        `剥离 caption 前缀 ${totals.captionsStripped} 处；转换纯文本引用 ${totals.refsConverted} 处；` +
+        `长表格注入 breakable ${totals.tablesBreakable} 个；callout 修复 ${totals.calloutFixes} 处；` +
+        `注入标题 label ${totals.headingsLabelled} 个；章节引用转 @ch ${totals.chapterRefsConverted} 处\n`
+    );
+
+    // 修复后重新 lint，剩余问题进入报告
+    ({ all: allIssues, per: fileIssues } = await lintTargets());
   }
 
   // ---------- 3. 报告 lint ----------
@@ -297,7 +490,14 @@ async function main() {
     }
     const mainTyp = await fs.readFile(path.join(PROJECT, "main.typ"), "utf8");
     const preamble = extractPreamble(mainTyp);
-    const results = await compileCheck(typst, chaptersDir, preamble, targets);
+    // 各章全量 label 集合：用于过滤 probe 单章编译的跨章引用误报
+    const labelSets = new Map();
+    for (const t of allFiles) {
+      try {
+        labelSets.set(t.slug, collectAllLabels(await fs.readFile(t.path, "utf8")));
+      } catch {}
+    }
+    const results = await compileCheck(typst, chaptersDir, preamble, targets, labelSets);
     for (const t of targets) {
       const r = results.get(t.slug);
       if (!r) continue;

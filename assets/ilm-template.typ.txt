@@ -9,19 +9,22 @@
 //   - Callout 提示框：四色（蓝/橙/红/绿）左边框 + 浅色背景
 //   - 表格：booktabs 风格（粗顶线 + 细中线 + 粗底线）
 //   - 图片：70% 宽度居中 + caption
+//   - 标题自动编号：第 C 章 / C.S（模板编号，章节文件不得再写手动编号）
+//   - 图表自动编号：图 C-S / 表 C-S（每章重置，正文用 @fig-C-S / @tab-C-S 引用）
 //
-// 脚本读取时按纯文本处理，替换 __BOOK_TITLE__ 等占位符。
-// 后缀 .typ.txt 以兼容 SkillHub 文件类型白名单。
+// 配置驱动（P1-4）：字体、编号格式、supplement 均由 assets/typst-default.config.json
+// 生成，lmdx2typst.mjs 读取本模板后替换 __PLACEHOLDER__ 占位符。
+// 后缀 .typ.txt 以兼容 SkillHub 文件类型白名单，脚本读取时按纯文本处理。
 
 #import "@preview/ilm:2.1.1": *
 
-// ---------- 中文字体配置 ----------
+// ---------- 中文字体配置（__FONT_*__ 由配置生成） ----------
 // 注意：字体栈回退项必须是字符串（"serif"/"monospace"），裸写 serif/monospace
 // 在 typst 0.15+ 会报 unknown variable 编译错误。
 #set text(
   lang: "zh",
-  font: ("LXGW WenKai", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", "serif"),
-  size: 12pt,
+  font: (__FONT_TEXT_ARGS__),
+  size: __FONT_TEXT_SIZE__,
 )
 
 // ---------- ilm 模板配置 ----------
@@ -35,6 +38,23 @@
   table-index: (enabled: true, title: "表格索引"),
   listing-index: (enabled: true, title: "代码索引"),
 )
+
+// ---------- 标题自动编号（配置驱动，P0-1） ----------
+// 模板自动编号「第 C 章 / C.S」，章节文件中的手动编号会被
+// scripts/lib/typst-optimize.mjs 在组装期剥离，避免双重编号。
+__HEADING_NUMBERING__
+
+// ---------- 图表编号与 supplement（配置驱动，P0-2） ----------
+// 图/表按「章-序」编号（每章重置），正文引用用 @fig-C-S / @tab-C-S。
+// lmdx2typst.mjs / typst-check.mjs --fix 会自动注入 label 并转换纯文本引用。
+__FIGURE_NUMBERING__
+
+// ---------- 长表格跨页（P0 表格质量） ----------
+// figure 默认不可断页，内部长表格会溢出页面；官方推荐用 show rule 打开 figure 的
+// 可断性（https://typst.app/docs/reference/model/figure/）。只作用于表格 figure，
+// 图片 figure 不受影响；超阈值（tables.splitThreshold）的表格由优化器另注入
+// breakable: true，两处配合实现长表跨页续排。
+#show figure.where(kind: table): set block(breakable: true)
 
 // ---------- 代码块样式优化 ----------
 // 行内代码：浅灰背景 + 小圆角
@@ -55,8 +75,8 @@
 
 // 代码字体
 #show raw: set text(
-  font: ("LXGW WenKai Mono", "DejaVu Sans Mono", "Source Code Pro", "Consolas", "monospace"),
-  size: 11pt,
+  font: (__FONT_CODE_ARGS__),
+  size: __FONT_CODE_SIZE__,
 )
 
 // ---------- Callout 提示框 ----------
