@@ -79,6 +79,20 @@ node scripts/lmdx2typst.mjs --title "书名" --author "作者"
 
 脚本此时会对全部已转换章节做**快速静态 lint**（零依赖、秒级），并在 `.conversion-plan.json` 的 `lintIssues` 字段输出问题清单。
 
+**封面**：`lmdx2typst.mjs` 组装 `main.typ` 时会替换模板占位符 `__COVER_PAGE__`，
+`typst/figures/cover.png`（或 `.jpg/.jpeg`）存在时插入整页封面：
+
+```typ
+#page(margin: 0pt, header: none, footer: none, fill: white)[
+  #image("figures/cover.png", width: 100%, height: 100%, fit: "contain")
+]
+#pagebreak()
+```
+
+`fit: "contain"` 保证 1280×1024 封面按比例完整显示、不裁切、不压字。封面来源与规格规则
+同 LaTeX：优先现成素材；没有时用 diagram-design 画全书架构图（spine、模块分群、依赖方向），
+图源进 `mdx/public/diagrams-src/cover.html`，产物进 `figures/`。
+
 ### 4. 检查与修复循环（check ⇄ fix，≤ 3 轮）-- 借鉴 pdf-to-typst-notes
 
 **不要**直接反复编译整本 main.typ（一次只报第一个错、串行低效）。使用 `scripts/typst-check.mjs`：

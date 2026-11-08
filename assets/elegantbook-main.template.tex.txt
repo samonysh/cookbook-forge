@@ -93,6 +93,7 @@
 \clubpenalty=10000
 
 \begin{document}
+__COVER_PAGE__
 \maketitle
 \tableofcontents
 

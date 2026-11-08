@@ -15,7 +15,7 @@
 //   - 编译器为 typst CLI 而非 xelatex
 //   - 样式优化：中文字体 LXGW WenKai、代码块圆角边框、四色 callout 提示框
 
-import { promises as fs } from "node:fs";
+import { promises as fs, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
@@ -349,6 +349,19 @@ await fs.writeFile(path.join(typstDir, "callout.typ"), calloutTemplate, "utf8");
 
 const includes = chapterRefs.map(c => `#include "chapters/${c.slug}.typ"`).join("\n");
 
+// 封面：figures/cover.png 存在时插入整页图（contain，避免裁切），否则不生成封面页。
+const coverFile = ["cover.png", "cover.jpg", "cover.jpeg"]
+  .map((name) => path.join(figDir, name))
+  .find((p) => existsSync(p));
+const coverPage = coverFile
+  ? [
+      `#page(margin: 0pt, header: none, footer: none, fill: white)[`,
+      `  #image("figures/${path.basename(coverFile)}", width: 100%, height: 100%, fit: "contain")`,
+      `]`,
+      `#pagebreak()`,
+    ].join("\n")
+  : "";
+
 mainTemplate = mainTemplate
   .replace(/__BOOK_TITLE__/g, BOOK_TITLE)
   .replace(/__BOOK_AUTHOR__/g, BOOK_AUTHOR)
@@ -359,6 +372,7 @@ mainTemplate = mainTemplate
   .replace(/__FONT_CODE_SIZE__/g, FONT_CODE_SIZE)
   .replace(/__HEADING_NUMBERING__/g, () => genHeadingNumbering(TCFG))
   .replace(/__FIGURE_NUMBERING__/g, () => genFigureNumbering(TCFG))
+  .replace("__COVER_PAGE__", coverPage)
   .replace("__CHAPTER_INCLUDES__", includes);
 
 await fs.writeFile(path.join(typstDir, "main.typ"), mainTemplate, "utf8");

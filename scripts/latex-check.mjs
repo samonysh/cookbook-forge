@@ -18,8 +18,9 @@
 //
 // 退出码：0 = 全部通过；1 = 存在 error 或编译失败；2 = 环境错误。
 
-import { promises as fs, existsSync, readdirSync } from "node:fs";
+import { promises as fs, existsSync, readdirSync, readFileSync } from "node:fs";
 import { execFile, execFileSync } from "node:child_process";
+import zlib from "node:zlib";
 import { promisify } from "node:util";
 import os from "node:os";
 import path from "node:path";
@@ -138,6 +139,176 @@ function parseLogErrors(logText, chapterPath) {
 
 function run(cmd, cmdArgs, opts) {
   return execFileAsync(cmd, cmdArgs, { timeout: 300000, maxBuffer: 32 * 1024 * 1024, ...opts });
+}
+
+// ---------- 封面检查 ----------
+// 封面是构建闸门：必须存在、尺寸 1280×1024、不是纯色/近空图。
+// 只对 PNG 做像素级空白检测（8-bit RGB/RGBA，非隔行）；其他格式明确报错，
+// 避免"存在即通过"的假闸门。
+
+const COVER_SIZE = { width: 1280, height: 1024 };
+const COVER_CANDIDATES = ["cover.png", "cover.jpg", "cover.jpeg"];
+
+function findCover(project) {
+  for (const name of COVER_CANDIDATES) {
+    const p = path.join(project, "figures", name);
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+
+function readPngHeader(buf) {
+  if (buf.length < 33 || buf.readUInt32BE(0) !== 0x89504e47) return null;
+  return {
+    width: buf.readUInt32BE(16),
+    height: buf.readUInt32BE(20),
+    bitDepth: buf[24],
+    colorType: buf[25],
+  };
+}
+
+/** 解码 8-bit RGB/RGBA 非隔行 PNG（cover 尺寸 ~1.3MP，成本可接受）。 */
+function decodePng(buf) {
+  const header = readPngHeader(buf);
+  if (!header) throw new Error("不是有效的 PNG 文件");
+  const { width, height, bitDepth, colorType } = header;
+  if (bitDepth !== 8 || (colorType !== 2 && colorType !== 6)) {
+    throw new Error(`PNG 编码不受支持（bitDepth=${bitDepth}, colorType=${colorType}），请导出 8-bit RGB/RGBA、非隔行 PNG`);
+  }
+  const channels = colorType === 6 ? 4 : 3;
+  const idat = [];
+  let offset = 8;
+  while (offset + 8 <= buf.length) {
+    const len = buf.readUInt32BE(offset);
+    const type = buf.toString("ascii", offset + 4, offset + 8);
+    const start = offset + 8;
+    if (type === "IDAT") idat.push(buf.subarray(start, start + len));
+    if (type === "IEND") break;
+    offset = start + len + 4;
+  }
+  if (idat.length === 0) throw new Error("PNG 缺少 IDAT 数据");
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  if (raw.length < (stride + 1) * height) throw new Error("PNG 像素数据长度不足");
+
+  const pixels = Buffer.alloc(stride * height);
+  let pos = 0;
+  for (let y = 0; y < height; y++) {
+    const filter = raw[pos++];
+    const row = y * stride;
+    for (let x = 0; x < stride; x++) {
+      const byte = raw[pos++];
+      const left = x >= channels ? pixels[row + x - channels] : 0;
+      const up = y > 0 ? pixels[row - stride + x] : 0;
+      const upLeft = y > 0 && x >= channels ? pixels[row - stride + x - channels] : 0;
+      let val;
+      if (filter === 0) val = byte;
+      else if (filter === 1) val = byte + left;
+      else if (filter === 2) val = byte + up;
+      else if (filter === 3) val = byte + ((left + up) >> 1);
+      else if (filter === 4) {
+        const p = left + up - upLeft;
+        const pa = Math.abs(p - left);
+        const pb = Math.abs(p - up);
+        const pc = Math.abs(p - upLeft);
+        val = byte + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft);
+      } else {
+        throw new Error(`PNG 未知行过滤器 ${filter}`);
+      }
+      pixels[row + x] = val & 0xff;
+    }
+  }
+  return { width, height, channels, pixels };
+}
+
+/** 采样量化：主色占比越低、量化色数越少，越接近纯色/近空图。 */
+function analyzePixels({ width, height, channels, pixels }) {
+  const counts = new Map();
+  let total = 0;
+  let opaque = 0;
+  const stepX = Math.max(1, Math.floor(width / 320));
+  const stepY = Math.max(1, Math.floor(height / 320));
+  for (let y = 0; y < height; y += stepY) {
+    for (let x = 0; x < width; x += stepX) {
+      const i = (y * width + x) * channels;
+      const alpha = channels === 4 ? pixels[i + 3] : 255;
+      total++;
+      if (alpha < 16) continue;
+      opaque++;
+      const key = ((pixels[i] >> 4) << 8) | ((pixels[i + 1] >> 4) << 4) | (pixels[i + 2] >> 4);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+  }
+  let dominant = 0;
+  for (const n of counts.values()) if (n > dominant) dominant = n;
+  return {
+    uniqueColors: counts.size,
+    inkRatio: opaque === 0 ? 0 : 1 - dominant / opaque,
+    opaqueRatio: total === 0 ? 0 : opaque / total,
+  };
+}
+
+function checkCover(project) {
+  const p = findCover(project);
+  if (!p) {
+    return {
+      ok: false,
+      issues: [{
+        rule: "cover-missing",
+        message: `封面缺失：未找到 figures/cover.png（要求 1280×1024，PNG）`,
+      }],
+    };
+  }
+  const rel = path.relative(project, p).replace(/\\/g, "/");
+  const ext = path.extname(p).toLowerCase();
+  if (ext !== ".png") {
+    return {
+      ok: false,
+      path: rel,
+      issues: [{
+        rule: "cover-format",
+        message: `封面格式不支持自动校验：${rel}。请导出 1280×1024 PNG（8-bit RGB/RGBA）`,
+      }],
+    };
+  }
+  const buf = readFileSync(p);
+  const header = readPngHeader(buf);
+  if (!header) {
+    return { ok: false, path: rel, issues: [{ rule: "cover-invalid", message: `封面不是有效 PNG：${rel}` }] };
+  }
+  if (header.width !== COVER_SIZE.width || header.height !== COVER_SIZE.height) {
+    return {
+      ok: false,
+      path: rel,
+      width: header.width,
+      height: header.height,
+      issues: [{
+        rule: "cover-size",
+        message: `封面尺寸不符：${rel} 为 ${header.width}×${header.height}，要求 ${COVER_SIZE.width}×${COVER_SIZE.height}`,
+      }],
+    };
+  }
+  let stats;
+  try {
+    stats = analyzePixels(decodePng(buf));
+  } catch (e) {
+    return { ok: false, path: rel, issues: [{ rule: "cover-analyze", message: `封面无法做空白检测：${rel}（${e.message}）` }] };
+  }
+  const blank = stats.uniqueColors < 8 || stats.inkRatio < 0.02 || stats.opaqueRatio < 0.5;
+  if (blank) {
+    return {
+      ok: false,
+      path: rel,
+      width: header.width,
+      height: header.height,
+      ...stats,
+      issues: [{
+        rule: "cover-blank",
+        message: `封面近似空白：${rel}（有效像素 ${(stats.inkRatio * 100).toFixed(1)}%，量化色 ${stats.uniqueColors}，不透明占比 ${(stats.opaqueRatio * 100).toFixed(1)}%；要求有效像素 ≥2%、色数 ≥8、不透明 ≥50%）`,
+      }],
+    };
+  }
+  return { ok: true, path: rel, width: header.width, height: header.height, ...stats, issues: [] };
 }
 
 // ---------- 每章 probe 并行编译 ----------
@@ -282,6 +453,19 @@ async function main() {
   await fs.writeFile(path.join(PROJECT, "_lint_report.json"), JSON.stringify(lintReport, null, 1), "utf8");
   console.log(`\n静态检查：${nErr} error / ${nWarn} warn -> _lint_report.json\n`);
 
+  // ---------- 3b. 封面检查 ----------
+  const cover = checkCover(PROJECT);
+  console.log("━━━ 封面检查 ━━━");
+  if (cover.ok) {
+    console.log(
+      `  [pass] ${cover.path} ${cover.width}×${cover.height}，有效像素 ${(cover.inkRatio * 100).toFixed(1)}%，量化色 ${cover.uniqueColors}`
+    );
+  } else {
+    for (const i of cover.issues) console.log(`  [FAIL] [${i.rule}] ${i.message}`);
+  }
+  await fs.writeFile(path.join(PROJECT, "_cover_report.json"), JSON.stringify(cover, null, 1), "utf8");
+  console.log("");
+
   // ---------- 4. 每章 probe 并行编译 ----------
   let compileFailed = {};
   let compilePassed = [];
@@ -320,11 +504,12 @@ async function main() {
     ...Object.keys(lintReport).filter((s) => (lintReport[s] || []).some((i) => i.severity === "error")),
     ...Object.keys(compileFailed),
   ]);
-  if (failedSlugs.size === 0) {
-    console.log("✓ 全部通过");
+  if (failedSlugs.size === 0 && cover.ok) {
+    console.log("✓ 全部通过（含封面检查）");
     process.exit(0);
   } else {
-    console.log(`✗ ${failedSlugs.size} 个章节需要修复：${[...failedSlugs].join(", ")}`);
+    if (!cover.ok) console.log(`✗ 封面检查未通过（${cover.issues.length} 个问题，详见 _cover_report.json）`);
+    if (failedSlugs.size > 0) console.log(`✗ ${failedSlugs.size} 个章节需要修复：${[...failedSlugs].join(", ")}`);
     console.log("\n修复建议：");
     console.log("  1. 可自动修复的已由 --fix 处理；");
     console.log("  2. 剩余问题读 _lint_report.json / _check_report.json，按章对照 MDX 原文交给 agent 修；");

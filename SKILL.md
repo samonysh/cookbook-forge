@@ -63,7 +63,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `scripts/subset-fonts.mjs` - 字体子集化（基于 `fonteditor-core`，TTF -> WOFF2；未安装时会提示 `npm install fonteditor-core` 并给出 Python fallback 命令）。
 - `scripts/optimize-formula-images.mjs` - 公式即图片型 HTML 结构修复（纯 JS 正则替换）。
 - `scripts/lmdx2tex.mjs` - **LLM 驱动**的 MDX -> ElegantBook LaTeX 转换器。通过子 agent 逐章节调用 LLM 智能转换，避免正则的脆弱性。组装后自动对已转换章节做静态 lint，并生成 `_TODO_LATEX_FIX.md` 修复任务清单。
-- `scripts/latex-check.mjs` - LaTeX 工程质量检查 CLI：静态 lint（`_lint_report.json`）+ 安全规则自动修复（`--fix`）+ 每章独立 probe 并行 xelatex 编译（`--compile`，`_check_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/latex-lint.mjs`。
+- `scripts/latex-check.mjs` - LaTeX 工程质量检查 CLI：静态 lint（`_lint_report.json`）+ 安全规则自动修复（`--fix`）+ 每章独立 probe 并行 xelatex 编译（`--compile`，`_check_report.json`）+ 封面闸门（存在 / 1280×1024 / 非空白，`_cover_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/latex-lint.mjs`。
 - `scripts/lmdx2typst.mjs` - **LLM 驱动**的 MDX -> Typst（ilm 模板）转换器。通过子 agent 逐章节调用 LLM 智能转换为 Typst 原生语法。排版规则（标题/图表编号、callout 调色板、字体）由 `assets/typst-default.config.json` 配置驱动（工作目录 `typst.config.json` 或 `--config` 可覆盖）。组装后自动对已转换章节做快速静态 lint。
 - `scripts/typst-check.mjs` - Typst 工程质量检查 CLI：静态 lint（`_lint_report.json`，含表格 hline 重复/越界/行列一致性、callout 闭合/颜色键/嵌套、章节引用完整性、代码块长行与裸 `@` 校验）+ 固化规则自动修复与确定性优化（`--fix`：数学块规则修复（含 `\oplus`/`\rightarrow` 等符号映射）+ 标题手动编号剥离 + figure label 自动注入 `<fig-C-S>`/`<tab-C-S>` + 纯文本图/表引用转 `@fig-C-S` 交叉引用 + 章节标题 label 注入 `<ch-<slug>>`/`<sec-<slug>-<seq>>` + 长表格注入 `breakable: true` + callout 类型名映射颜色键/补缺失标题，全部幂等）+ 每章独立 probe 并行编译（`--compile`，`_check_report.json`，错误经知识库映射附带 `suggestion`，跨章引用误报自动过滤），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/typst-lint.mjs` 与优化器 `scripts/lib/typst-optimize.mjs`（借鉴 pdf-to-typst-notes 的 compile_check.py / fix_common.py）。
 - `scripts/word-count.mjs` - 字数统计（GFM 表格按"表头+分隔行"块计数，不再虚高）。
@@ -107,7 +107,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 3. **每章一个 MDX**：使用 MDX（MDXJS + unified）作为权威中间格式，每章独立文件，便于多格式转换。
 4. **内容深入**：兼顾原理与实用，包含背景引入、章节地图、正文、代码（带注释）、图表、表格、Recipe、陷阱、要点总结、参考文献。
 5. **图表丰富**：条件触发 + 每章硬下限 2 张图。一个 H2 涉及 ≥3 个对象且存在先后/分层/分支/状态迁移时**必须**配图；禁止为凑数画装饰图。图源默认 diagram-design 的 HTML→SVG，mermaid/plantuml 围栏保留兼容。
-6. **字数可配置**：默认 8 万字以上；可按需求调整（短篇手册 2–3 万字，综述 3–5 万字，完整 CookBook 8–15 万字）。
+6. **篇幅按覆盖度定，不设逐章预算**：A0/A1 之后先定全书总量目标（模块数 × 递归深度 × 概念密度）；CJK 正文下限 5 万字（不含 meta），这是底线不是目标；上限不设死线，以「每个模块是否讲透」判断，超出同类技术参考区间时须说明必要性。章长按模块权重分配（重章可 8 千，边缘章可 3 千），不平均分。详见方法论文档 6.6。
 7. **多格式输出**：默认 MDX；按用户指定输出 `mdx/`、`latex-pdf/`、`nextra-site/`、`epub/`、`typst/` 子文件夹。
 
 ---
@@ -177,11 +177,11 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - 主题/领域（自然语言描述）
 - 资料清单：URL（网页、文档站、arxiv、GitHub）、本地文件（PDF、EPUB、MD、代码目录）
 - 目标读者：初学者 / 中级 / 高级 / 研究者 / 架构师
-- 目标字数（默认 8 万字）
+- 目标字数：A0/A1 后按「模块数 × 递归深度 × 概念密度」定全书总量；下限 5 万 CJK（不含 meta），不设死上限
 - 输出格式：MDX（默认）/ PDF / Nextra 网站 / EPUB / Typst，可组合
 - 图表工具偏好：mermaid / plantuml / drawio / excalidraw / chart
 - 主语言：中文（默认）/ 英文 / 双语
-- 是否需要封面（默认需要）
+- 是否需要封面（默认需要；无素材时用 diagram-design 画全书架构图，1280×1024 PNG）
 - GitHub 仓库 URL、站点名、Logo（用于 Nextra 站部署）
 
 若有缺失，**用 AskUserQuestion 简洁询问**，不要一次问超过 4 个问题。
@@ -254,7 +254,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 title: "第 1 章 项目全景图"
 chapter: 1
 slug: "ch01-overview"
-wordCountTarget: 4000
+moduleWeight: 2      # 1–3；章长按权重分配，不是固定配额
 status: "draft"
 references:
   - "https://example.com/docs"
@@ -333,6 +333,13 @@ references:
 - 有说明段落
 - 通过 `render-figures.mjs` 检查（每章 ≥2 图，图文件与正文引用都存在）
 
+#### 封面规范
+
+- 默认需要封面；优先使用用户提供的图片，统一转成 1280×1024 PNG。
+- **没有合适素材时不要留空、不要用纯色占位**：用 diagram-design 默认样式画一张说明全书架构的图——必须体现 spine（读者旅程/主线）、模块分群（章组）与主要依赖方向；标题用书名，副标题用一句话定位。
+- 尺寸固定 1280×1024；图源 `mdx/public/diagrams-src/cover.html`，产物 `mdx/public/figures/cover.svg` + `cover.png`。沿用「diagrams-src 入库、figures 为派生物」的规则。
+- 转换器会把 `figures/cover.png` 自动插入 LaTeX / Typst / EPUB 首页（contain 方式，不裁切）；`latex-check.mjs` 强制校验存在、尺寸与非空白。
+
 #### 表格规范
 
 - 使用标准 GFM markdown 表格（MDX 支持）。
@@ -384,15 +391,18 @@ references:
 写完所有章节后：
 
 - 用脚本统计每章中文字符、英文词数，生成 `metadata/word-count.txt`。
+- **总量在 A0/A1 之后定，不按固定章长反推**：全书总量 = 模块数 × 平均递归深度 × 概念密度。参考区间（CJK，不含 meta）：纯库/框架 6–10 万；语言/规范 8–14 万；系统/平台 10–18 万；应用/教程型 5–8 万。
+- **下限 5 万 CJK（不含 meta）是底线，不是目标；上限不设死线**。是否继续写由覆盖度决定：每个模块是否讲到读者能独立判断/操作。超过同类参考区间时，在大纲或 `04-dual-track.md` 写明「为什么这个内容量是必要的」，不要按比例或预算卡住。
+- **章长按模块权重分配，不平均分**：权重 = 模块复杂度 × 读者依赖度 × 概念密度（各 1–3 分）；重章可 8 千，边缘章可 3 千。大纲中的「预估字数」是分配结果，不是配额；写作中按内容完整性调整并回填。
 - **双线比例不靠写前估算**：运行 `node scripts/ratio-count.mjs --root=<book> --write`。脚本按 `<!-- track: ... -->` 汇总各轨 CJK 字数，输出实际比例、与大纲/`frontmatter.ratio` 目标的偏差和超阈值提示，并把实测结果回填到 frontmatter 的 `ratio`。报告写 `metadata/ratio-report.txt`，阶段 6 质检直接消费这份报告。
 - **口径要记住：应用线字数按正文 CJK 计，代码块与 HTML 注释不计入。** 因此「用代码承载应用知识、正文只写两句」会让所有章节系统性偏原理线——代码越多，应用线占比反而越低。应用线必须靠正文把**任务、参数怎么选、边界、排错、最小验证**讲清楚；代码只负责可运行证据，不承担讲解。发现应用线占比偏低时，补的是正文任务链与判断依据，不是再贴一段代码，也不是削薄原理线。
-- 若未达目标字数，按以下优先级扩写（禁止空话填充）：
+- 若全书不足 5 万，或某个模块没讲透，按以下优先级扩写（禁止空话填充）：
   1. 新增 Recipes（任务导向）
   2. 加深源码/原理分析
   3. 扩展配置项/API 速查表
   4. 增加对比表格、故障排查章节
   5. 补充附录
-- 再次统计直到达标或明确说明缺口原因。
+- 再次统计，直到达到覆盖标准；内容确实超出同类参考区间时写明理由，而不是为了「不超预算」削薄内容。
 
 ### 阶段 5：多格式转换（按用户要求）
 
@@ -509,10 +519,10 @@ references:
 - [ ] 正文无「材料有偏差/原文有误」类表述（R1 WARN 已人工复核）
 - [ ] 表格无裸 LaTeX/Markdown 残留（在 MDX 阶段用 GFM 表格）
 - [ ] 跨章引用都是可点击 markdown 链接
-- [ ] 字数达标或明确说明缺口
+- [ ] 全书 ≥5 万 CJK（不含 meta），总量与模块权重一致；超出同类参考区间已写明理由
 - [ ] `metadata/sources.md` 记录所有参考资料
 - [ ] MDX 输出存在且 `_meta.ts` 章节顺序正确
-- [ ] 若输出 LaTeX/PDF：`latex-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；xelatex 两遍编译成功；封面 1280×1024 非空；PDF 无 Markdown 残留
+- [ ] 若输出 LaTeX/PDF：`latex-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；xelatex 两遍编译成功；封面检查通过（存在、1280×1024、非空白，见 `_cover_report.json`）；PDF 无 Markdown 残留
 - [ ] 若输出 Nextra：`npm run build` 成功；Docker healthy；`/zh` 200；所有图表 200
 - [ ] 若输出 EPUB：`epub-check.mjs --fix` 退出码 0（每章 XML 良构 + 包结构全通过）；mimetype 第一且 STORED；字体子集化嵌入；代码块/表格样式生效
 - [ ] 若输出 Typst：`typst-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；typst compile 零 error；无 Markdown/LaTeX 语法残留；数学公式使用 Typst 原生语法、数学块内无裸中文/裸缩写、数学调用参数 `#` 前缀齐全；标题无手动编号（模板自动编号，无双编号）；figure 均有 `<fig-C-S>`/`<tab-C-S>` label、引用为 `@fig-C-S` 交叉引用且无悬空引用；优化器幂等（重跑 `--fix` 零变更）；表格使用 table() + table.hline() 且 hline 无重复/越界、长表（> splitThreshold 行）已注入 `breakable: true`；callout 颜色键合法、内容块 `[ ]` 闭合、无嵌套 callout；章节标题有 `ch-`/`sec-` label、章节引用不指向不存在的章号；代码块无超长行/裸 `@`；图片路径 `../figures/`；字体预检通过；中文字体正确配置
@@ -548,9 +558,9 @@ references:
 | EPUB 嵌入字体让书变 30MB | 用了完整 TTF | fontTools 子集化转 WOFF2，单字体 ~300KB |
 | EPUB 打包后打不开 | mimetype 不是第一/被压缩 | 必须 Python zipfile，mimetype STORED 优先写入 |
 | PDF 出现 `\| --- \|` Markdown 表格 | 未转 LaTeX 表格 | mdx2tex 脚本必须把 GFM 表格转为 booktabs/tabularx |
-| PDF 封面空白 | 图片不存在/尺寸错 | 严格 1280×1024；验证文件存在 + PDF 首页非空 |
+| PDF 封面缺失/尺寸错/空白 | 未生成封面，或图片近乎纯色 | `latex-check.mjs` 会报 `cover-missing` / `cover-size` / `cover-blank`；按「封面规范」重画 1280×1024 PNG |
 | 跨章引用"第 N 章"编号错乱 | reading order ≠ 文件名 | 跑 renumber-content.mjs 链接化 |
-| 字数不够 8 万 | 只写了使用文档没深入原理/源码 | 扩写 Recipes、源码解析、配置速查、附录 |
+| 全书不足 5 万 CJK | 只写了使用文档，没深入原理/源码 | 按覆盖缺口扩写 Recipes、源码解析、配置速查、附录；不要靠注水凑数 |
 | 资料受限无法抓取 | 网站有反爬/登录墙 | 不绕过限制；改用可访问来源并告知用户 |
 | Typst 编译报错 `unknown variable` | 混用了 LaTeX 语法 | 检查公式用 Typst 原生语法（`$ frac(a,b) $` 而非 `$\frac{a}{b}$`）；`typst-check.mjs --fix` 自动修 |
 | Typst 数学块报 `unknown variable: 测量/AIC` | 数学内裸中文/裸缩写 | 必须加引号（`"测量"`、`"AIC"`）；`typst-check.mjs --fix` 自动加 |
@@ -589,14 +599,14 @@ references:
 执行时用 TodoWrite 建立：
 
 ```text
-0. 识别输入：主题、资料、读者、字数、输出格式、图表偏好、语言、封面、部署参数
+0. 识别输入：主题、资料、读者、输出格式、图表偏好、语言、封面策略、部署参数
 1. 穷尽式资料采集（URL/GitHub/arxiv/PDF/EPUB/本地目录/网络补充）-> metadata/sources.md
-2. 设计章节大纲（含全景图、每章目标/字数/图表/来源）-> metadata/outline.md
+2. 设计章节大纲（含全景图、每章读者问题/模块权重/图表/来源，附全书总量目标）-> metadata/outline.md
 3. AskUserQuestion 与用户对齐 outline
-4. 准备封面图片（1280×1024，记录来源）
-5. 逐章写作 mdx/*.mdx（含 track/verify 标记、N.0–N.10、代码中文注释、公式说明、N.10 参考）
+4. 封面：有素材则转成 1280×1024 PNG；无素材则用 diagram-design 画全书架构图（spine、模块分群、依赖方向）-> diagrams-src/cover.html + figures/cover.png
+5. 逐章写作 mdx/*.mdx（含 track/verify/source/FIGURE 标记、N.0–N.10、代码中文注释、公式说明、N.10 参考）
 6. 生成 mdx/public/diagrams-src/<fig-NN-M>.html + `render-figures.mjs` 导出 figures/
-7. 字数统计；`ratio-count.mjs --write` 回填比例；`chapter-lint.mjs --strict` 结构质检；不足则扩写
+7. 字数统计；`ratio-count.mjs --write` 回填比例；`chapter-lint.mjs --strict` 结构质检；按覆盖度扩写（下限 5 万 CJK）
 8. 生成 mdx/_meta.ts
 9a. [可选] **LLM 驱动** MDX -> ElegantBook LaTeX（scripts/lmdx2tex.mjs + Task 子 agent 逐章转换），xelatex 两遍编译出 PDF。详见 references/stage-5b-latex.md
 9b. [可选] 初始化 Nextra 站点，拷贝 mdx，渲染图表，npm run build + Docker 验证。详见 references/stage-5c-nextra.md

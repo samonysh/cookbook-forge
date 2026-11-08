@@ -72,16 +72,33 @@ ElegantBook 文档类依赖 `elegantbook.cls`，需要先准备好 cls 文件：
 - [ ] PDF 不得出现 Markdown 表格源码
 - [ ] 表格必须 LaTeX 环境，不得过挤
 - [ ] 代码块必须 tcolorbox/listings 样式
-- [ ] 封面非空
-- [ ] 字数达标
+- [ ] 封面通过 `latex-check.mjs` 闸门（存在、1280×1024、非空白，详见 `latex/_cover_report.json`）
+- [ ] 全书 ≥5 万 CJK（不含 meta），章长与模块权重一致
 - [ ] LaTeX 可复现编译（零 error）
+
+### 7.1 封面（自动插入 + 闸门）
+
+`lmdx2tex.mjs` 组装 `main.tex` 时会在 `\begin{document}` 后插入整页封面：
+`figures/cover.png`（或 `.jpg/.jpeg`）存在时替换模板占位符 `__COVER_PAGE__`，
+生成 `\includegraphics[width=\textwidth,height=\textheight,keepaspectratio]` + `\newpage`。
+封面规格固定为 **1280×1024 PNG**；没有现成素材时，用 diagram-design 默认样式画一张
+说明全书架构的图（spine、模块分群、主要依赖方向），图源放 `mdx/public/diagrams-src/cover.html`，
+产物放 `figures/cover.svg` 与 `figures/cover.png`。
+
+`latex-check.mjs` 的封面闸门会拦截三类失败，退出码非 0 时不得交付：
+
+| 场景 | `_cover_report.json` 错误码 | 典型原因 |
+|---|---|---|
+| 缺失 | `cover-missing` | `figures/` 下没有 cover.png/jpg/jpeg |
+| 尺寸不符 | `cover-size` | 不是 1280×1024（常见为缩放后 640×512） |
+| 空白 | `cover-blank` | 纯色底或近空图（唯一色 <8、墨迹比 <2%、不透明比 <50%） |
 
 ### 8. 收尾抽查（子 agent）
 
 生成完成后，使用 Task 工具启动子 agent 检查所有输出文件：
 - 检查 LaTeX 编译零 error、PDF 无 Markdown 残留
 - 检查表格为 LaTeX 环境、代码块为 tcolorbox 样式
-- 检查封面非空、图片引用路径正确
+- 检查封面存在且通过闸门（`_cover_report.json` 全部 `pass`）、图片引用路径正确
 - 发现错误立即修复，修复后重新 xelatex 编译验证
 
 ## 图表处理

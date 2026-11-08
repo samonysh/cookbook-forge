@@ -31,7 +31,7 @@
 
 It consolidates the core capabilities of three pre-existing Skills:
 
-- **project-cookbook-latex** — exhaustive research, source-level analysis, 80k+ word structure, ElegantBook typography, PDF quality gates
+- **project-cookbook-latex** — exhaustive research, source-level analysis, coverage-driven deep-book structure, ElegantBook typography, PDF quality gates
 - **latex-to-nextra-site** — Nextra v3 site scaffolding, Docker deployment, chapter renumbering, PlantUML/Drawio rendering, MDX conversion
 - **epub-reader-optimizer** — EPUB CSS rewriting, font subsetting & embedding, formula-as-image HTML repair, spec-compliant packaging
 
@@ -45,6 +45,8 @@ It consolidates the core capabilities of three pre-existing Skills:
 - ⚙️ **Two conversion paths**: LLM chapter-by-chapter conversion (three prompts) and deterministic `mdx2book.mjs`; the latter parses block by block, keeps prose verbatim, and uses explicit figure numbering `fig-NN-M` for structurally simple chapters
 - 🧾 **Auditable writing process**: four kinds of HTML annotations (`track` / `verify` / `source` / `FIGURE`) stay in MDX and are stripped uniformly at conversion time; `chapter-lint.mjs` validates the N.0–N.10 skeleton, figure slots, verification levels, and per-block run records
 - 📊 **Measured dual-track ratio**: `ratio-count.mjs` counts body CJK characters per `track` (code blocks and HTML comments excluded), writes back to frontmatter, and emits a report
+- 📐 **Length driven by coverage**: after A0/A1 the total is derived from module count × recursion depth × concept density; floor is 50k CJK (excluding meta), no fixed per-chapter budget, chapter length follows module weight
+- 🖼 **Cover gate**: when no artwork exists, draw a whole-book architecture diagram (spine / module groups / dependency direction) with diagram-design; `latex-check.mjs` verifies presence, 1280×1024 size, and non-blank pixels
 - 🎨 Rich figures: HTML sources (exported to SVG via `assets/diagram-style/`) / mermaid / plantuml / drawio / excalidraw / chart, chosen based on user preference
 - 📖 **MDX + four final formats** (combinable):
   - **MDX** (default): chapterized Markdown + JSX, the source format
@@ -141,7 +143,7 @@ Phase 0  Input gathering  → topic / sources / audience / word count / formats 
 Phase 1  Research         → URLs / GitHub / arxiv / PDF / EPUB / local / web → metadata/sources.md
 Phase 2  Outline          → big picture + TOC → metadata/outline.md ⚠️ must get user approval
 Phase 3  Chapter MDX      → one .mdx per chapter: intro / map / theory / practice / Recipes / pitfalls / key points / see-also
-Phase 4  Word count       → expand via Recipes / source analysis / lookup tables / appendices until target met
+Phase 4  Length calibration → expand by coverage (Recipes / source analysis / lookup tables / appendices); floor 50k CJK, no per-chapter budget
 Phase 5  Format conversion (sub-agent checks & fixes after each format)
   5a.  MDX               (default)
   5b.  ElegantBook       -> xelatex (two passes) -> PDF
@@ -184,8 +186,9 @@ Before delivery:
 - [ ] Dual-track ratio: `ratio-count.mjs --write` report exists and `ratio` is written back to frontmatter
 - [ ] Four HTML annotation types (track / verify / source / FIGURE) do not leak into `.tex` / `.typ` / XHTML
 - [ ] Cross-chapter references are clickable links
-- [ ] Word target met, or gap explicitly documented
-- [ ] PDF: `latex-check.mjs --fix --compile` exits 0; xelatex builds clean; cover 1280×1024 non-empty; no Markdown residue
+- [ ] Whole book ≥50k CJK (excluding meta); total length consistent with module weights, with a stated reason when exceeding the reference band
+- [ ] Cover passes the `latex-check.mjs` gate (presence, 1280×1024, non-blank)
+- [ ] PDF: `latex-check.mjs --fix --compile` exits 0; xelatex builds clean; no Markdown residue
 - [ ] Nextra: `npm run build` passes; Docker healthy; `/zh` returns 200
 - [ ] EPUB: `epub-check.mjs --fix` exits 0 (per-chapter XML well-formed + package checks); mimetype first & STORED; fonts subset-embedded; CSS effective
 - [ ] Typst: typst compile zero errors; no Markdown/LaTeX syntax residue; CJK fonts configured; `main.typ` contains `@preview/ilm:<version>` and `#show: ilm.with(...)`, with `--fix` restoration when missing

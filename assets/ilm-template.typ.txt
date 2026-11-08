@@ -18,6 +18,9 @@
 
 #import "@preview/ilm:2.1.1": *
 
+// ---------- 封面（lmdx2typst.mjs 检测到 figures/cover.png 时注入） ----------
+__COVER_PAGE__
+
 // ---------- 中文字体配置（__FONT_*__ 由配置生成） ----------
 // 注意：字体栈回退项必须是字符串（"serif"/"monospace"），裸写 serif/monospace
 // 在 typst 0.15+ 会报 unknown variable 编译错误。

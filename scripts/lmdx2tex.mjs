@@ -13,7 +13,7 @@
 //   - mdx2tex.mjs 使用正则替换（脆弱，容易转义错误）
 //   - lmdx2tex.mjs 使用 LLM 逐章转换（语义理解，转换质量高）
 
-import { promises as fs } from "node:fs";
+import { promises as fs, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
@@ -257,12 +257,27 @@ let mainTemplate = await fs.readFile(mainTemplatePath, "utf8");
 
 const inputs = chapterRefs.map(c => `\\input{chapters/${c.slug}}`).join("\n");
 
+// 封面：figures/cover.png 存在时插入整页图，否则保留纯文字书名页。
+const coverFile = ["cover.png", "cover.jpg", "cover.jpeg"]
+  .map((name) => path.join(figDir, name))
+  .find((p) => existsSync(p));
+const coverPage = coverFile
+  ? [
+      "\\thispagestyle{empty}",
+      "\\begin{center}",
+      `\\includegraphics[width=\\textwidth,height=\\textheight,keepaspectratio]{figures/${path.basename(coverFile)}}`,
+      "\\end{center}",
+      "\\newpage",
+    ].join("\n")
+  : "";
+
 mainTemplate = mainTemplate
   .replace(/__BOOK_TITLE__/g, BOOK_TITLE)
   .replace(/__BOOK_SUBTITLE__/g, BOOK_SUBTITLE)
   .replace(/__BOOK_AUTHOR__/g, BOOK_AUTHOR)
   .replace(/__BOOK_INSTITUTE__/g, BOOK_INSTITUTE)
   .replace(/__BOOK_VERSION__/g, BOOK_VERSION)
+  .replace("__COVER_PAGE__", coverPage)
   .replace("__CHAPTER_INPUTS__", inputs);
 
 await fs.writeFile(path.resolve("latex/main.tex"), mainTemplate, "utf8");

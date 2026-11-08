@@ -195,6 +195,7 @@ ${mdxForLlm}
 // ---------- 拷贝图片 ----------
 console.log("\n━━━ 拷贝图片资源 ━━━");
 const manifestExtra = [];
+let coverImage = null; // { href, mime }
 const figSrcDir = path.resolve(mdxDir, "public", "figures");
 try {
   const figs = await fs.readdir(figSrcDir);
@@ -209,25 +210,56 @@ try {
                : ext === "jpg" || ext === "jpeg" ? "image/jpeg"
                : ext === "gif" ? "image/gif"
                : "application/octet-stream";
-    manifestExtra.push(`<item id="img-${idx++}" href="Images/${fn}" media-type="${mime}"/>`);
+    if (/^cover\.(png|jpe?g)$/i.test(fn)) {
+      coverImage = { href: `Images/${fn}`, mime };
+      manifestExtra.push(`<item id="cover-image" href="${coverImage.href}" media-type="${mime}" properties="cover-image"/>`);
+    } else {
+      manifestExtra.push(`<item id="img-${idx++}" href="Images/${fn}" media-type="${mime}"/>`);
+    }
   }
   console.log(`  拷贝了 ${figs.length} 个图片到 OEBPS/Images/`);
+  if (coverImage) console.log(`  封面：${coverImage.href}`);
 } catch {
   console.log("  未找到图片目录，跳过");
 }
 
 manifestExtra.push(`<item id="css" href="css/stylesheet.css" media-type="text/css"/>`);
 
+// ---------- 封面页（存在 figures/cover.* 时作为第一页） ----------
+let coverManifest = "";
+let coverSpine = "";
+let coverMeta = "";
+if (coverImage) {
+  const coverDoc = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${BOOK_LANG}" lang="${BOOK_LANG}">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>封面</title>
+<link rel="stylesheet" type="text/css" href="css/stylesheet.css"/>
+</head>
+<body class="cover-page">
+<img src="${coverImage.href}" alt="封面"/>
+</body>
+</html>`;
+  await fs.writeFile(path.join(OEBPS, "cover.xhtml"), coverDoc, "utf8");
+  coverManifest = `<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>\n`;
+  coverSpine = `<itemref idref="cover"/>\n`;
+  coverMeta = `<meta name="cover" content="cover-image"/>\n`;
+  console.log("  ✓ cover.xhtml");
+}
+
 // ---------- 生成 content.opf ----------
 console.log("\n━━━ 生成 EPUB 元数据文件 ━━━");
 
 const manifestItems = [
   `<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`,
+  ...(coverManifest ? [coverManifest.trim()] : []),
   ...manifestExtra,
   ...chapterFiles.map(c =>
     `<item id="${c.id}" href="${c.href}" media-type="application/xhtml+xml"/>`),
 ].join("\n");
-const spineItems = chapterFiles.map(c => `<itemref idref="${c.id}"/>`).join("\n");
+const spineItems = `${coverSpine}${chapterFiles.map(c => `<itemref idref="${c.id}"/>`).join("\n")}`;
 
 const opf = `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
@@ -237,7 +269,7 @@ const opf = `<?xml version="1.0" encoding="UTF-8"?>
 <dc:identifier id="uid">urn:cookbook:${Date.now()}</dc:identifier>
 <dc:creator>Cookbook Forge</dc:creator>
 <meta property="dcterms:modified">${new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')}</meta>
-</metadata>
+${coverMeta}</metadata>
 <manifest>
 ${manifestItems}
 </manifest>
@@ -287,6 +319,8 @@ let css = await fs.readFile(cssSrc, "utf8");
 // 追加 CookBook 专用样式
 css += `
 /* === CookBook Forge LLM Converter 追加样式 === */
+.cover-page { margin: 0; padding: 0; text-align: center; }
+.cover-page img { max-width: 100%; max-height: 100vh; page-break-after: always; }
 .callout {
   margin: 1em 0;
   padding: 0.75em 1em;

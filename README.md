@@ -31,7 +31,7 @@
 
 它组合并吸收了三个既有 Skill 的核心能力：
 
-- **project-cookbook-latex**：资料穷尽、源码级分析、8 万字长文结构、ElegantBook 排版规范、PDF 质量闸门
+- **project-cookbook-latex**：资料穷尽、源码级分析、按覆盖度定篇幅的深度长文结构、ElegantBook 排版规范、PDF 质量闸门
 - **latex-to-nextra-site**：Nextra v3 站点工程、Docker 部署、章节重编号、PlantUML/Drawio 渲染、MDX 转换
 - **epub-reader-optimizer**：EPUB CSS 重写、字体子集化嵌入、公式图片修复、合规打包
 
@@ -45,6 +45,8 @@
 - ⚙️ **双转换路径**：LLM 逐章转换（三个 Prompt）与 `mdx2book.mjs` 确定性转换并存；后者按块解析、正文逐字保留，图表使用显式编号 `fig-NN-M`，适合结构固定的章节
 - 🧾 **写作过程可审计**：四类 HTML 注解（`track` / `verify` / `source` / `FIGURE`）在 MDX 内保留、转换时统一剥离；`chapter-lint.mjs` 校验 N.0–N.10 骨架、图位、验证等级与逐块实测记录
 - 📊 **双线比例实测**：`ratio-count.mjs` 按 `track` 统计正文 CJK 字数（剔除代码块与 HTML 注释），回填 frontmatter 并输出报告
+- 📐 **篇幅按覆盖度定**：A0/A1 后按模块数 × 递归深度 × 概念密度定全书总量；下限 5 万 CJK（不含 meta），不设逐章固定预算，章长按模块权重分配
+- 🖼 **封面闸门**：无素材时用 diagram-design 画全书架构图（spine / 模块分群 / 依赖方向）；`latex-check.mjs` 校验封面存在、1280×1024、非空白
 - 🎨 **丰富图表**：HTML 图源（`assets/diagram-style/` 导出 SVG）/ mermaid / plantuml / drawio / excalidraw / chart，按用户偏好选用
 - 📖 **MDX + 四种最终格式**（可组合）：
   - **MDX**（默认）：章节化 Markdown + JSX，适合作为源格式
@@ -141,7 +143,7 @@ cookbook-forge/
 阶段 1  资料采集     → URL/GitHub/arxiv/PDF/EPUB/本地/网络补充 → metadata/sources.md
 阶段 2  大纲设计     → 全景图 + 章节目录 → metadata/outline.md ⚠️ 必须用户确认
 阶段 3  逐章 MDX     → 每章 .mdx：引入/地图/原理/实用/Recipes/陷阱/要点/延伸阅读
-阶段 4  字数统计     → 不足则扩写 Recipes/源码解析/速查表/附录
+阶段 4  篇幅校准     → 按覆盖度扩写 Recipes/源码解析/速查表/附录；下限 5 万 CJK，不设逐章预算
 阶段 5  多格式转换（每种格式生成后子 agent 检查修复）
   5a.  MDX          （默认）
   5b.  ElegantBook  -> xelatex 两遍编译 -> PDF
@@ -184,8 +186,9 @@ cookbook-forge/
 - [ ] 双线比例：`ratio-count.mjs --write` 报告存在，`ratio` 已回填 frontmatter
 - [ ] 四类 HTML 注解（track / verify / source / FIGURE）未泄漏到 `.tex` / `.typ` / XHTML
 - [ ] 跨章引用为可点击链接
-- [ ] 字数达标或明确说明缺口
-- [ ] PDF：`latex-check.mjs --fix --compile` 退出码 0；xelatex 编译通过；封面 1280×1024 非空；无 Markdown 残留
+- [ ] 全书 ≥5 万 CJK（不含 meta）；总量与模块权重一致，超出同类参考区间已写明理由
+- [ ] 封面通过 `latex-check.mjs` 闸门（存在、1280×1024、非空白）
+- [ ] PDF：`latex-check.mjs --fix --compile` 退出码 0；xelatex 编译通过；无 Markdown 残留
 - [ ] Nextra：`npm run build` 通过；Docker healthy；`/zh` 200
 - [ ] EPUB：`epub-check.mjs --fix` 退出码 0（每章 XML 良构 + 包结构）；mimetype 第一且 STORED；字体子集化嵌入；CSS 生效
 - [ ] Typst：`typst-check.mjs --fix --compile` 退出码 0；typst compile 零 error；无 Markdown/LaTeX 语法残留；数学块内无裸中文/裸缩写；中文字体正确配置
