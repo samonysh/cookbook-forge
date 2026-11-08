@@ -73,7 +73,7 @@ ElegantBook 文档类依赖 `elegantbook.cls`，需要先准备好 cls 文件：
 - [ ] 表格必须 LaTeX 环境，不得过挤
 - [ ] 代码块必须 tcolorbox/listings 样式
 - [ ] 封面通过 `latex-check.mjs` 闸门（存在、1280×1024、非空白，详见 `latex/_cover_report.json`）
-- [ ] 全书 ≥5 万 CJK（不含 meta），章长与模块权重一致
+- [ ] 全书 `body3` ≥5 万 CJK（只算正文：剔除代码块、HTML 注释、meta；表格按 1/2 计数），章长与模块权重一致
 - [ ] LaTeX 可复现编译（零 error）
 
 ### 7.1 封面（ElegantBook 原生图位 + 闸门）

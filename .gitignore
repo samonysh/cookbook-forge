@@ -15,10 +15,17 @@ coverage/
 # 测试输出产物（不属于 Skill 本体）
 test-output/
 
-# 生成的书籍产物
+# 生成的书籍产物：PDF / EPUB 等二进制一律不入库
 *.epub
 *.pdf
 *.zip
+
+# 书籍工程目录：LaTeX / Typst / EPUB / MDX 源与构建产物都不进本 Skill 仓库
+# 发布时用 git tag + GitHub Release 附件分发，不提交二进制或整本样书
+latex/
+typst/
+epub/
+mdx/
 
 # 书籍工程的本地产物（规范与脚本之外的中间态）
 # 只忽略渲染产物 figures/；diagrams-src/ 是手写图源，必须入库

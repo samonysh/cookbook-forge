@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.4.0"><img src="https://img.shields.io/badge/version-1.4.0-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.5.0"><img src="https://img.shields.io/badge/version-1.5.0-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -44,8 +44,8 @@ It consolidates the core capabilities of three pre-existing Skills:
 - 📝 MDX as the canonical intermediate format: one `.mdx` per chapter for easy conversion to any downstream format
 - ⚙️ **Two conversion paths**: LLM chapter-by-chapter conversion (three prompts) and deterministic `mdx2book.mjs`; the latter parses block by block, keeps prose verbatim, and uses explicit figure numbering `fig-NN-M` for structurally simple chapters
 - 🧾 **Auditable writing process**: four kinds of HTML annotations (`track` / `verify` / `source` / `FIGURE`) stay in MDX and are stripped uniformly at conversion time; `chapter-lint.mjs` validates the N.0–N.10 skeleton, figure slots, verification levels, and per-block run records
-- 📊 **Measured dual-track ratio**: `ratio-count.mjs` counts body CJK characters per `track` (code blocks and HTML comments excluded), writes back to frontmatter, and emits a report
-- 📐 **Length driven by coverage**: after A0/A1 the total is derived from module count × recursion depth × concept density; floor is 50k CJK (excluding meta), no fixed per-chapter budget, chapter length follows module weight
+- 📊 **Measured dual-track ratio**: `ratio-count.mjs` counts prose CJK per `track` (code blocks, HTML comments and meta excluded; tables counted at 1/2), writes back to frontmatter, and emits a report; warns when prose <120 chars, or table share >60% with prose <300 chars
+- 📐 **Length driven by coverage**: after A0/A1 the total is derived from module count × recursion depth × concept density; floor is 50k CJK (`body3`: code blocks, HTML comments and meta excluded; tables counted at 1/2), no fixed per-chapter budget, chapter length follows module weight
 - 🖼 **Cover gate**: when no artwork exists, draw a whole-book architecture diagram (spine / module groups / dependency direction) with diagram-design; `latex-check.mjs` verifies presence, 1280×1024 size, and non-blank pixels
 - 🎨 Rich figures: HTML sources (exported to SVG via `assets/diagram-style/`) / mermaid / plantuml / drawio / excalidraw / chart, chosen based on user preference
 - 📖 **MDX + four final formats** (combinable):
@@ -89,10 +89,10 @@ cookbook-forge/
 │   ├── epub-check.mjs                    # EPUB lint + per-chapter XML well-formedness + package checks
 │   ├── mdx2book.mjs                      # Deterministic MDX -> Typst/LaTeX/EPUB chapters (explicit figure numbers)
 │   ├── chapter-lint.mjs                  # Chapter structure lint (N.0–N.10, markers, figures, run records)
-│   ├── ratio-count.mjs                   # Dual-track ratio (CJK per track, code blocks/comments excluded)
+│   ├── ratio-count.mjs                   # Dual-track ratio + prose caliber (tables at 1/2, table-only warnings)
 │   ├── render-figures.mjs                # Figure source -> SVG export and slot validation
 │   ├── render-diagrams.mjs               # Diagram renderer (mermaid/plantuml -> SVG)
-│   ├── word-count.mjs                    # Word count
+│   ├── word-count.mjs                    # Word count (shared prose caliber: code/comments/meta excluded, tables at 1/2)
 │   ├── epub-zip.mjs                      # EPUB-compliant packager
 │   ├── subset-fonts.mjs                  # Font subsetting
 │   ├── optimize-formula-images.mjs       # Formula image repair
@@ -143,7 +143,7 @@ Phase 0  Input gathering  → topic / sources / audience / word count / formats 
 Phase 1  Research         → URLs / GitHub / arxiv / PDF / EPUB / local / web → metadata/sources.md
 Phase 2  Outline          → big picture + TOC → metadata/outline.md ⚠️ must get user approval
 Phase 3  Chapter MDX      → one .mdx per chapter: intro / map / theory / practice / Recipes / pitfalls / key points / see-also
-Phase 4  Length calibration → expand by coverage (Recipes / source analysis / lookup tables / appendices); floor 50k CJK, no per-chapter budget
+Phase 4  Length calibration → expand by coverage (Recipes / source analysis / lookup tables / appendices); floor 50k CJK (body3; tables at 1/2), no per-chapter budget
 Phase 5  Format conversion (sub-agent checks & fixes after each format)
   5a.  MDX               (default)
   5b.  ElegantBook       -> xelatex (two passes) -> PDF
@@ -183,16 +183,21 @@ Before delivery:
 - [ ] All code blocks have language tags and Chinese comments
 - [ ] All figures have number, caption, in-text reference, and explanatory paragraph
 - [ ] Chapter skeleton: `chapter-lint.mjs --strict` exits 0 (N.0–N.10, four annotation types, figures match frontmatter, per-block run records)
-- [ ] Dual-track ratio: `ratio-count.mjs --write` report exists and `ratio` is written back to frontmatter
+- [ ] Dual-track ratio: `ratio-count.mjs --write` report exists and `ratio` is written back to frontmatter; table-only / insufficient-prose warnings resolved
 - [ ] Four HTML annotation types (track / verify / source / FIGURE) do not leak into `.tex` / `.typ` / XHTML
 - [ ] Cross-chapter references are clickable links
-- [ ] Whole book ≥50k CJK (excluding meta); total length consistent with module weights, with a stated reason when exceeding the reference band
+- [ ] Whole book `body3` ≥50k CJK (prose only: code blocks, HTML comments and meta excluded; tables counted at 1/2); total length consistent with module weights, with a stated reason when exceeding the reference band
 - [ ] Cover passes the `latex-check.mjs` gate (presence, 1280×1024, non-blank)
 - [ ] PDF: `latex-check.mjs --fix --compile` exits 0; xelatex builds clean; no Markdown residue
 - [ ] Nextra: `npm run build` passes; Docker healthy; `/zh` returns 200
 - [ ] EPUB: `epub-check.mjs --fix` exits 0 (per-chapter XML well-formed + package checks); mimetype first & STORED; fonts subset-embedded; CSS effective
 - [ ] Typst: typst compile zero errors; no Markdown/LaTeX syntax residue; CJK fonts configured; `main.typ` contains `@preview/ilm:<version>` and `#show: ilm.with(...)`, with `--fix` restoration when missing
 - [ ] Diagrams: source preserved in diagrams-src/, rendered output in figures/
+- [ ] Build artifacts are not committed: no `*.pdf`, `*.epub`, or `latex/`, `typst/`, `epub/`, `mdx/` build directories in the book repo; releases use tags + Release assets
+
+### Book artifacts are not committed
+
+This Skill repository only contains the Skill itself (`scripts/`, `assets/`, `references/` and docs). PDF, EPUB, and Typst/LaTeX/EPUB build directories (`latex/`, `typst/`, `epub/`, `mdx/`) are never committed; each book project excludes them and `*.pdf` / `*.epub` in its own `.gitignore`. Publish binaries via git tags + GitHub Release assets.
 
 ## Publishing to SkillHub
 

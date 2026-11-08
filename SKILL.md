@@ -2,7 +2,7 @@
 name: "cookbook-forge"
 slug: "cookbook-forge"
 displayName: "Cookbook Forge"
-version: "1.4.0"
+version: "1.5.0"
 license: "MIT"
 summary: "从多源资料生成深度技术 CookBook / Handbook / Survey，产出 MDX -> ElegantBook PDF、Nextra 网站、优化 EPUB、Typst PDF。"
 description: "Generates deep technical CookBooks, Handbooks, and Surveys from user materials (websites, PDFs, EPUBs, GitHub repos, arxiv papers, docs). Produces MDX chapters first, then ElegantBook LaTeX/PDF, Nextra website, optimized EPUB, and Typst PDF. Invoke when user asks to write a Cookbook, handbook, survey, technical book, or structured long-form documentation for a project/domain."
@@ -66,13 +66,13 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `scripts/latex-check.mjs` - LaTeX 工程质量检查 CLI：静态 lint（`_lint_report.json`）+ 安全规则自动修复（`--fix`）+ 每章独立 probe 并行 xelatex 编译（`--compile`，`_check_report.json`）+ 封面闸门（存在 / 1280×1024 / 非空白，`_cover_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/latex-lint.mjs`。
 - `scripts/lmdx2typst.mjs` - **LLM 驱动**的 MDX -> Typst（ilm 模板）转换器。通过子 agent 逐章节调用 LLM 智能转换为 Typst 原生语法。排版规则（标题/图表编号、callout 调色板、字体）由 `assets/typst-default.config.json` 配置驱动（工作目录 `typst.config.json` 或 `--config` 可覆盖）。组装后自动对已转换章节做快速静态 lint。
 - `scripts/typst-check.mjs` - Typst 工程质量检查 CLI：静态 lint（`_lint_report.json`，含表格 hline 重复/越界/行列一致性、callout 闭合/颜色键/嵌套、章节引用完整性、代码块长行与裸 `@` 校验）+ 固化规则自动修复与确定性优化（`--fix`：数学块规则修复（含 `\oplus`/`\rightarrow` 等符号映射）+ 标题手动编号剥离 + figure label 自动注入 `<fig-C-S>`/`<tab-C-S>` + 纯文本图/表引用转 `@fig-C-S` 交叉引用 + 章节标题 label 注入 `<ch-<slug>>`/`<sec-<slug>-<seq>>` + 长表格注入 `breakable: true` + callout 类型名映射颜色键/补缺失标题，全部幂等）+ 每章独立 probe 并行编译（`--compile`，`_check_report.json`，错误经知识库映射附带 `suggestion`，跨章引用误报自动过滤），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/typst-lint.mjs` 与优化器 `scripts/lib/typst-optimize.mjs`（借鉴 pdf-to-typst-notes 的 compile_check.py / fix_common.py）。
-- `scripts/word-count.mjs` - 字数统计（GFM 表格按"表头+分隔行"块计数，不再虚高）。
+- `scripts/word-count.mjs` - 字数统计（与 `ratio-count.mjs` 共用 `scripts/lib/word-caliber.mjs`：只算正文 CJK，剔除代码块/HTML 注释/meta，表格按 1/2 计数）。
 - `scripts/lbuild-epub.mjs` - **LLM 驱动**的 MDX -> EPUB3 转换器。通过子 agent 逐章节调用 LLM 智能转换为 XHTML，然后组装为 EPUB。组装后自动对已转换章节做静态 lint + XML 良构校验，并生成 `_TODO_EPUB_FIX.md` 修复任务清单。
 - `scripts/epub-check.mjs` - EPUB 工程质量检查 CLI：静态 lint + 每章 XML 良构校验（纯 JS 零依赖，`_lint_report.json`）+ 安全规则自动修复（`--fix`）+ 包结构检查（manifest/spine/nav/mimetype，`_check_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/epub-lint.mjs`。
 - `scripts/typst-fonts-check.mjs` - P1-4 字体可用性预检：运行 `typst fonts` 与配置 `fonts` 栈比对，报告缺失字体（编译前预检一次即可避免中文豆腐块）。
 - `scripts/kroki-render.mjs` - PlantUML 通过 Kroki.io 远程渲染（deflate+base64url 编码 GET，含隐私提示）。
 - `scripts/render-figures.mjs` - 图位与图源对齐：扫描 `<!-- FIGURE: fig-NN-M ... -->`，优先调用 `assets/diagram-style/export_svg.py` 把 `mdx/public/diagrams-src/<id>.html` 导出为 `mdx/public/figures/<id>.svg`，校验正文引用与每章 ≥2 图，报告写 `metadata/figure-report.txt`。
-- `scripts/ratio-count.mjs` - 双线比例度量：按 `<!-- track: app|principle|synthesis|meta -->` 汇总各轨 CJK 字数，对比 frontmatter/大纲目标比例；`--write` 把实测结果回填 frontmatter，报告写 `metadata/ratio-report.txt`。
+- `scripts/ratio-count.mjs` - 双线比例与正文口径度量：按 `<!-- track: app|principle|synthesis|meta -->` 汇总各轨 CJK（剔除代码块/HTML 注释/meta，表格内 CJK × 0.5），对比 frontmatter/大纲目标比例；对「有表但成段论述 <120 字」或「表格折算占比 >60% 且成段论述 <300 字」的小节报 WARN；`--write` 回填 frontmatter，报告写 `metadata/ratio-report.txt`。
 - `scripts/chapter-lint.mjs` - 章节结构 lint：V1 验证等级标记、V2 图位语法、V3 frontmatter figures 一致性、V4 逐块实测记录，以及 F1 图产物/每章下限、C1 代码中文注释、M1 公式中文说明、R1 材料点评禁语（WARN）、N1 章末参考小节。
 - `scripts/mdx2book.mjs` - **确定性**的 MDX -> Typst / LaTeX / EPUB XHTML 章节转换器（`--format typst|latex|epub|all --root <book>`）：按块解析标题、GFM 表格、围栏代码、图位与图/表交叉引用，正文逐字保留，只做语法层转换。图表使用显式编号（`fig-NN-M` 去前导零得到 `<fig-C-M>` / `fig:C-M`），不依赖后处理自动计数器，与 LLM 路径的 numbering 规则等价；适合结构固定（H2/H3、无 JSX/公式）的章节，是 5b/5d/5e 的低成本替代路径。
 - `assets/prompts/mdx-to-latex.md` - LLM 转换 MDX->LaTeX 的系统 Prompt 模板（定义所有映射规则）。
@@ -107,7 +107,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 3. **每章一个 MDX**：使用 MDX（MDXJS + unified）作为权威中间格式，每章独立文件，便于多格式转换。
 4. **内容深入**：兼顾原理与实用，包含背景引入、章节地图、正文、代码（带注释）、图表、表格、Recipe、陷阱、要点总结、参考文献。
 5. **图表丰富**：条件触发 + 每章硬下限 2 张图。一个 H2 涉及 ≥3 个对象且存在先后/分层/分支/状态迁移时**必须**配图；禁止为凑数画装饰图。图源默认 diagram-design 的 HTML→SVG，mermaid/plantuml 围栏保留兼容。
-6. **篇幅按覆盖度定，不设逐章预算**：A0/A1 之后先定全书总量目标（模块数 × 递归深度 × 概念密度）；CJK 正文下限 5 万字（不含 meta），这是底线不是目标；上限不设死线，以「每个模块是否讲透」判断，超出同类技术参考区间时须说明必要性。章长按模块权重分配（重章可 8 千，边缘章可 3 千），不平均分。详见方法论文档 6.6。
+6. **篇幅按覆盖度定，不设逐章预算**：A0/A1 之后先定全书总量目标（模块数 × 递归深度 × 概念密度）；CJK 正文下限 5 万字（`body3` 口径：不含 meta，剔除代码块与 HTML 注释，表格按 1/2 计数），这是底线不是目标；上限不设死线，以「每个模块是否讲透」判断。章长按模块权重分配（重章可 8 千，边缘章可 3 千），不平均分。**表格不能替代论述**：每节仍要有成段文字把因果与取舍讲出来。详见方法论文档 6.6。
 7. **多格式输出**：默认 MDX；按用户指定输出 `mdx/`、`latex-pdf/`、`nextra-site/`、`epub/`、`typst/` 子文件夹。
 
 ---
@@ -166,6 +166,8 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
     └── outline.md                    # 最终章节大纲（与用户对齐版）
 ```
 
+**目录与入库约定**：以上目录属于**书籍工程**，不属于本 Skill 仓库。本 Skill 仓库只收录 `scripts/`、`assets/`、`references/` 与文档；**PDF、EPUB 与 Typst/LaTeX/EPUB 构建目录（`latex/`、`typst/`、`epub/`、`mdx/`）一律不入库**。书籍工程需在自己的 `.gitignore` 里排除这些目录与 `*.pdf`、`*.epub`；需要发布时用 git tag + GitHub Release 附件分发二进制产物，不把二进制提交进仓库。
+
 ---
 
 ## 工作流程
@@ -177,7 +179,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - 主题/领域（自然语言描述）
 - 资料清单：URL（网页、文档站、arxiv、GitHub）、本地文件（PDF、EPUB、MD、代码目录）
 - 目标读者：初学者 / 中级 / 高级 / 研究者 / 架构师
-- 目标字数：A0/A1 后按「模块数 × 递归深度 × 概念密度」定全书总量；下限 5 万 CJK（不含 meta），不设死上限
+- 目标字数：A0/A1 后按「模块数 × 递归深度 × 概念密度」定全书总量；下限 5 万 CJK（`body3` 口径：不含 meta、剔除代码块与 HTML 注释、表格按 1/2 计数），不设死上限
 - 输出格式：MDX（默认）/ PDF / Nextra 网站 / EPUB / Typst，可组合
 - 图表工具偏好：mermaid / plantuml / drawio / excalidraw / chart
 - 主语言：中文（默认）/ 英文 / 双语
@@ -283,7 +285,7 @@ references:
 以下七条是阶段 3 的硬性约束，违反任一条都应在阶段 6 被 lint 或人工复核拦下。
 
 1. **轨道标记**：每个 H2 上一行写 `<!-- track: app|principle|synthesis|meta -->`。`N.0`/`N.10` 用 `meta`；应用线 `app`；原理线 `principle`；综合段 `synthesis`。阶段 4 用 `ratio-count.mjs` 汇总，不允许写前估算。
-2. **验证等级**：每个 ```python/```py 代码块前 3 行内写 `<!-- verify: L1|L2|L3 -->`。L1 = 导入与语法通过；L2 = 端到端跑通（含离线 `TestModel` 等路径）；L3 = 行为可信（真实模型或可验证的行为断言）。只到 L2 的示例不得对行为下断言，只能陈述「跑通」。逐块记录写 `metadata/verify/chNN.txt`。
+2. **验证等级**：每个 ```python/```py 代码块前 3 行内写 `<!-- verify: L1|L2|L3 -->`。L1 = 导入与语法通过；L2 = 端到端跑通（含离线测试模型等路径）；L3 = 行为可信（真实模型或可验证的行为断言）。只到 L2 的示例不得对行为下断言，只能陈述「跑通」。逐块记录写 `metadata/verify/chNN.txt`。
 3. **配图**：一个 H2 涉及 ≥3 个对象且存在先后、分层、分支或状态迁移时**必须**配图；每章硬下限 2 图；禁止为凑数画装饰图。图源优先 diagram-design 的 HTML→SVG（`assets/diagram-style/export_svg.py`），HTML 放 `mdx/public/diagrams-src/<id>.html`，导出 `mdx/public/figures/<id>.svg`；mermaid/plantuml 围栏保留兼容。
 4. **代码中文注释**：关键行、关键参数用中文注释说明意图，不逐行注水。
 5. **公式中文说明**：每个块级公式后说明符号含义，以及这个式子到底在说明什么。
@@ -389,22 +391,22 @@ references:
 - 数学公式：行内 `$E=mc^2$`，块级 `$$...$$`（KaTeX 兼容）。
 - 所有跨章引用用 markdown 链接形式：`[见第 3 章](./ch03-xxx.mdx)`。
 
-### 阶段 4：字数统计与双线比例回填
+### 阶段 4：字数统计与双线比例校准
 
 写完所有章节后：
 
-- 用脚本统计每章中文字符、英文词数，生成 `metadata/word-count.txt`。
-- **总量在 A0/A1 之后定，不按固定章长反推**：全书总量 = 模块数 × 平均递归深度 × 概念密度。参考区间（CJK，不含 meta）：纯库/框架 6–10 万；语言/规范 8–14 万；系统/平台 10–18 万；应用/教程型 5–8 万。
-- **下限 5 万 CJK（不含 meta）是底线，不是目标；上限不设死线**。是否继续写由覆盖度决定：每个模块是否讲到读者能独立判断/操作。超过同类参考区间时，在大纲或 `04-dual-track.md` 写明「为什么这个内容量是必要的」，不要按比例或预算卡住。
-- **章长按模块权重分配，不平均分**：权重 = 模块复杂度 × 读者依赖度 × 概念密度（各 1–3 分）；重章可 8 千，边缘章可 3 千。大纲中的「预估字数」是分配结果，不是配额；写作中按内容完整性调整并回填。
-- **双线比例不靠写前估算**：运行 `node scripts/ratio-count.mjs --root=<book> --write`。脚本按 `<!-- track: ... -->` 汇总各轨 CJK 字数，输出实际比例、与大纲/`frontmatter.ratio` 目标的偏差和超阈值提示，并把实测结果回填到 frontmatter 的 `ratio`。报告写 `metadata/ratio-report.txt`，阶段 6 质检直接消费这份报告。
-- **字数口径固定三分，报告必须带标签**：`tApp`（应用线 + 原理线，双线合计）/ `body3`（tApp + 综合段，全书正文）/ `含 meta`（body3 + 章首等）。对外汇报禁止只写「全书正文」：71,272 是 tApp，72,644 与 80,576 是 body3，混标会让人误以为有章节被删改。`ratio-count.mjs` 已按三分口径输出。
-- **口径要记住：应用线字数按正文 CJK 计，代码块与 HTML 注释不计入。** 因此「用代码承载应用知识、正文只写两句」会让所有章节系统性偏原理线——代码越多，应用线占比反而越低。应用线必须靠正文把**任务、参数怎么选、边界、排错、最小验证**讲清楚；代码只负责可运行证据，不承担讲解。发现应用线占比偏低时，补的是正文任务链与判断依据，不是再贴一段代码，也不是削薄原理线。
-- 若全书不足 5 万，或某个模块没讲透，按以下优先级扩写（禁止空话填充）：
+- 用 `word-count.mjs` 统计每章与全书 CJK，生成 `metadata/word-count.txt`；用 `ratio-count.mjs` 出双线报告。两者共用 `scripts/lib/word-caliber.mjs`，口径必须一致。
+- **字数口径（全仓唯一）**：只算正文，剔除围栏代码块、HTML 注释与 meta（章首 / `N.0` / `N.10`）；Markdown 表格按 1/2 计数（表内 CJK × 0.5），表格以外的成段文字按 1:1 计数。禁止另立口径。
+- **5 万字是全书正文（`body3`）的最低下限，不是目标值**：它只用于防止内容单薄。是否继续写由覆盖度决定；上限不设死线。超过同类参考区间时在大纲或 `04-dual-track.md` 写明「为什么这个内容量是必要的」。
+- **表格不能替代论述**：每个 H2 小节都必须有成段文字讲清因果、取舍与边界，表格只做对照与速查。`ratio-count.mjs` 的告警阈值为：**有表但成段论述 <120 字**，或**表格折算字数占该节正文 >60% 且成段论述 <300 字**。命中即 WARN，需补段落或人工确认，不允许靠加表格凑字数。
+- **双线比例是事后校准，不是写作约束**：运行 `node scripts/ratio-count.mjs --root=<book> --write`。脚本按 track 汇总各轨 CJK，输出实际比例、与大纲/`frontmatter.ratio` 目标的偏差（超 ±10pp 报 WARN），并把实测结果回填 frontmatter 的 `ratio`。写作时按内容完整性写，不必先算比例；比例失衡时回看是否某条线被代码或表格替代。
+- **字数口径固定三分，报告必须带标签**：`tApp`（应用线 + 原理线，双线合计）/ `body3`（tApp + 综合段，全书正文）/ `含 meta`（body3 + 章首等）。对外汇报禁止只写「全书正文」，并必须注明「表格按 1/2 计数」。
+- **应用线字数按正文 CJK 计**（代码块与 HTML 注释不计入）。用代码承载应用知识、正文只写两句，会让应用线系统性偏低；应用线必须靠正文把**任务、参数怎么选、边界、排错、最小验证**讲清楚，代码只负责可运行证据。发现应用线占比偏低时，补的是正文任务链与判断依据，不是再贴代码，也不是削薄原理线。
+- 若 `body3` 不足 5 万，或某个模块没讲透，按以下优先级扩写（禁止空话填充，禁止靠加表格凑字数）：
   1. 新增 Recipes（任务导向）
   2. 加深源码/原理分析
-  3. 扩展配置项/API 速查表
-  4. 增加对比表格、故障排查章节
+  3. 扩展配置项/API 速查表（须配成段解释）
+  4. 增加对比分析、故障排查章节
   5. 补充附录
 - 再次统计，直到达到覆盖标准；内容确实超出同类参考区间时写明理由，而不是为了「不超预算」削薄内容。
 
@@ -489,9 +491,9 @@ references:
 
 ### 阶段 6：最终交付
 
-1. 在 `metadata/word-count.txt` 写入最终统计（中文字符、英文词数、估算总字、章节数、Recipe、表格、代码块、图表数）。
+1. 在 `metadata/word-count.txt` 写入最终统计（body3 口径中文字符、meta、英文词数、章节数、Recipe、表格、代码块、图表数）。
 2. **结构闸门（两份报告）**：
-   - `node scripts/ratio-count.mjs --root=<book> --write` 生成的 `metadata/ratio-report.txt`：实际比例、偏差、超阈值提示；`ratio` 已回填。
+   - `node scripts/ratio-count.mjs --root=<book> --write` 生成的 `metadata/ratio-report.txt`：三分口径字数（tApp / body3 / 含 meta）、实际比例、偏差、超阈值提示、「只有表格 / 成段论述不足」WARN；`ratio` 已回填。
    - `node scripts/chapter-lint.mjs --root=<book> --strict` 生成的 `metadata/chapter-lint.txt`：V1–V4 + F1/C1/M1/R1/N1 无 ERROR；R1 的 WARN 必须人工复核。
 3. **断言强度校验**：逐章核对正文断言是否超过该代码块的验证等级。L1 只能陈述「导入/语法通过」，L2 只能陈述「跑通」，L3 才能陈述行为结论。`metadata/verify/chNN.txt` 是逐块实测证据。
 4. 在 `metadata/sources.md` 列出所有参考资料。
@@ -514,7 +516,7 @@ references:
 - [ ] 每章一个 MDX，frontmatter 完整
 - [ ] 每章都有引入、章节地图、要点总结、延伸阅读
 - [ ] 每章 `N.0–N.10` 骨架完整，`N.10 本章参考` 独立存在
-- [ ] 每个 H2 前有 `track:` 标记；`ratio-count.mjs --write` 已回填 `ratio`，报告无超阈值告警
+- [ ] 每个 H2 前有 `track:` 标记；`ratio-count.mjs --write` 已回填 `ratio`，报告无超阈值告警；「只有表格 / 成段论述不足」的 WARN 已补段落或人工确认
 - [ ] 每个 python 块前有 `verify: L1/L2/L3`，`metadata/verify/chNN.txt` 块数与等级一致
 - [ ] 正文断言强度不超过对应代码块的验证等级
 - [ ] 代码块全部带语言标识 + 关键中文注释
@@ -523,7 +525,8 @@ references:
 - [ ] 正文无「材料有偏差/原文有误」类表述（R1 WARN 已人工复核）
 - [ ] 表格无裸 LaTeX/Markdown 残留（在 MDX 阶段用 GFM 表格）
 - [ ] 跨章引用都是可点击 markdown 链接
-- [ ] 全书 ≥5 万 CJK（不含 meta），总量与模块权重一致；超出同类参考区间已写明理由；汇报同时写明 tApp / body3 / 含 meta 三个数，禁止只写「全书正文」
+- [ ] 全书 `body3` ≥5 万 CJK（只算正文：剔除代码块、HTML 注释、meta；表格按 1/2 计数）；总量与模块权重一致；超出同类参考区间已写明理由；汇报同时写明 tApp / body3 / 含 meta 三个数并注明表格口径，禁止只写「全书正文」
+- [ ] 三端产物不入库：Skill 仓库与书籍仓库均不含 `*.pdf`、`*.epub` 与 `latex/`、`typst/`、`epub/`、`mdx/` 构建目录；发布走 tag + Release 附件
 - [ ] `metadata/sources.md` 记录所有参考资料
 - [ ] MDX 输出存在且 `_meta.ts` 章节顺序正确
 - [ ] 若输出 LaTeX/PDF：`latex-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；xelatex 两遍编译成功；封面检查通过（存在、1280×1024、非空白，见 `_cover_report.json`）；PDF 无 Markdown 残留
@@ -564,7 +567,7 @@ references:
 | PDF 出现 `\| --- \|` Markdown 表格 | 未转 LaTeX 表格 | mdx2tex 脚本必须把 GFM 表格转为 booktabs/tabularx |
 | PDF 封面缺失/尺寸错/空白 | 未生成封面，或图片近乎纯色 | `latex-check.mjs` 会报 `cover-missing` / `cover-size` / `cover-blank`；按「封面规范」重画 1280×1024 PNG |
 | 跨章引用"第 N 章"编号错乱 | reading order ≠ 文件名 | 跑 renumber-content.mjs 链接化 |
-| 全书不足 5 万 CJK | 只写了使用文档，没深入原理/源码 | 按覆盖缺口扩写 Recipes、源码解析、配置速查、附录；不要靠注水凑数 |
+| 全书 `body3` 不足 5 万 CJK | 只写了使用文档，没深入原理/源码 | 按覆盖缺口扩写 Recipes、源码解析、配置速查、附录；不要靠注水或加表格凑数 |
 | 资料受限无法抓取 | 网站有反爬/登录墙 | 不绕过限制；改用可访问来源并告知用户 |
 | Typst 编译报错 `unknown variable` | 混用了 LaTeX 语法 | 检查公式用 Typst 原生语法（`$ frac(a,b) $` 而非 `$\frac{a}{b}$`）；`typst-check.mjs --fix` 自动修 |
 | Typst 数学块报 `unknown variable: 测量/AIC` | 数学内裸中文/裸缩写 | 必须加引号（`"测量"`、`"AIC"`）；`typst-check.mjs --fix` 自动加 |
@@ -593,31 +596,33 @@ references:
 | 图表在 PDF/EPUB 中不显示 | 只保留了源码未渲染 | 必须同时渲染 SVG/PNG 到 figures/ 并在正文中引用 |
 | `.typ`/`.tex`/XHTML 里出现 `<!-- track: ... -->` | 转换器未剥离 HTML 注释 | `mdx-utils.stripHtmlComments()` 已在三个转换器接入；回归时 grep `<!--` 应为 0 |
 | `chapter-lint` 报 F1 图文件缺失 | 只有 FIGURE 注解，没有 HTML 源或 SVG | 补 `diagrams-src/<id>.html` 后跑 `render-figures.mjs --strict` |
-| 双线比例与大纲不一致 | frontmatter `ratio` 是写前估算 | 跑 `ratio-count.mjs --write`，以报告实测值为准 |
+| 双线比例与大纲不一致 | frontmatter `ratio` 是写前估算 | 跑 `ratio-count.mjs --write`，以报告实测值为准；比例是事后校准，不为凑比例改内容 |
+| 某节只有表格、没有成段论述 | 用表格代替因果与取舍说明 | `ratio-count.mjs` 报「成段论述 <120 字」或「表格折算占比 >60% 且论述 <300 字」；补成段文字，不删表凑数 |
 | 正文说「证明行为正确」但只到 L2 | 断言超过验证等级 | 降级为「跑通」；要下行为结论需补 L3 证据 |
-| 断言说「证明行为正确」但证据是 TestModel 输出 | TestModel/mock 只验证形状，不执行真实模型 | 最多算 L2；L3 行为断言必须附真实运行产物（命令、退出码、关键输出），否则降级措辞 |
+| 断言说「证明行为正确」但证据是测试模型输出 | 测试模型/mock 只验证形状，不执行真实模型 | 最多算 L2；L3 行为断言必须附真实运行产物（命令、退出码、关键输出），否则降级措辞 |
 | 图出现顺序与编号不一致 | 写作中途插图/挪图，编号沿用旧值 | `chapter-lint.mjs` 的 V5 规则告警；定稿按告警重编号，再跑 `render-figures.mjs --strict` |
 | 标题/目录残留 `N.1`、`N.2` 占位章号 | 骨架模板的 N 没换成真实章号 | `chapter-lint.mjs` 的 N2 规则拦截；三端转换后再 grep `^#{1,6}\s+N\.` 与「第 N 章」 |
 | 表格没有题注却进了「表目录」 | 无 caption 的 table 被图表索引收录 | 每张表必须有题注；交付前核对图表目录条目数 = 有题注的图表数 |
 | PDF 出现 `Overfull \hbox` | 行内代码/长标识符不换行 | xelatex 后 grep `main.log` 的 `Overfull \hbox`，按行号把长 token 改成 `\allowbreak` 或独立代码块 |
 | 逐章 probe 报「封面文件缺失」 | probe 在 `_probe/` 下，`figures/cover.png` 相对路径失效 | `typst-check.mjs` 已自动镜像导言 figures 资源到 `_probe/figures/`；仍缺失时先查源文件 |
-| 两轮字数对不上 | 一轮报 tApp、另一轮报 body3，标签混用 | 三口径必须带标签（tApp / body3 / 含 meta），见阶段 4 |
+| 两轮字数对不上 | 一轮报 tApp、另一轮报 body3，或表格口径不同，标签混用 | 三口径必须带标签（tApp / body3 / 含 meta），并统一用 `word-caliber.mjs`（表格 ×0.5） |
+| PDF/EPUB/build 目录被误提交 | 书籍工程未设 `.gitignore`，或把 Skill 仓库当书仓用 | `.gitignore` 排除 `latex/`、`typst/`、`epub/`、`mdx/`、`*.pdf`、`*.epub`；发布用 tag + Release 附件 |
 
 ---
 
-## 实测基线（14 章实战，2026-11-08）
+## 实测基线（一本库框架类样书，2026-11-08）
 
 | 指标 | 实测值 | 说明 |
 |---|---|---|
-| 章节 | 14 章 / 4 篇 | 由 A0 判定 + A2 spine 决定，不是固定 15 章模板 |
-| 双线合计 tApp | 71,272 CJK | 应用 39,943 : 原理 31,329 ≈ 56:44 |
-| 全书正文 body3 | 81,322 CJK | 综合段 10,050，占正文 12.4% |
+| 章节 | 约 14 章 | 由 A0 判定 + A2 spine 决定，不是固定 15 章模板；此处只给量级，不列可反查目录 |
+| 双线合计 tApp | 67,024 CJK | 应用 36,695 : 原理 30,330 ≈ 55:45 |
+| 全书正文 body3 | 75,069 CJK | 综合段 8,045，占正文 10.7%；表格按 1/2 折算后仍 ≥5 万 |
 | meta | 7,963 CJK | 章首等，不计入正文与比例 |
 | 图 | 36 张正文图 + 1 张封面 | 每章 ≥2，产物、正文引用、图题齐全 |
 | 可运行代码块 | 80 个 | 全部带 L1/L2/L3 标记与 `metadata/verify/` 实测记录 |
 | 三链 | LaTeX / Typst / EPUB 各 14/14 通过 | 零编译错误，封面/目录/页码衔接正常 |
 
-> 这组数字是可复查的验收基线，不是「建议这样做」的口号。规则是否有效，用它们对照：图数、代码块数、三链通过率都能当场复算。
+> 这组数字是可复查的验收基线，不是「建议这样做」的口号。规则是否有效，用它们对照：图数、代码块数、三链通过率都能当场复算。样书只以「一本库框架类样书」指代，不写书名、作者、仓库路径或可反查的目录结构。
 
 ---
 
@@ -633,7 +638,7 @@ references:
 4. 封面：有素材则转成 1280×1024 PNG；无素材则用 diagram-design 画全书架构图（spine、模块分群、依赖方向）-> diagrams-src/cover.html + figures/cover.png
 5. 逐章写作 mdx/*.mdx（含 track/verify/source/FIGURE 标记、N.0–N.10、代码中文注释、公式说明、N.10 参考）
 6. 生成 mdx/public/diagrams-src/<fig-NN-M>.html + `render-figures.mjs` 导出 figures/
-7. 字数统计；`ratio-count.mjs --write` 回填比例；`chapter-lint.mjs --strict` 结构质检；按覆盖度扩写（下限 5 万 CJK）
+7. 字数统计（`word-count.mjs`，body3 口径：剔代码块/HTML 注释/meta，表格按 1/2）；`ratio-count.mjs --write` 回填比例；`chapter-lint.mjs --strict` 结构质检；按覆盖度扩写（下限 5 万 CJK）
 8. 生成 mdx/_meta.ts
 9a. [可选] **LLM 驱动** MDX -> ElegantBook LaTeX（scripts/lmdx2tex.mjs + Task 子 agent 逐章转换），xelatex 两遍编译出 PDF。详见 references/stage-5b-latex.md
 9b. [可选] 初始化 Nextra 站点，拷贝 mdx，渲染图表，npm run build + Docker 验证。详见 references/stage-5c-nextra.md
@@ -679,6 +684,6 @@ references:
 - 不要在正文点评材料来源（如「你提供的文档有偏差」「原文写法有误」）；参考内容统一放 `N.10 本章参考`。
 - 不要在代码块里省略关键中文注释，也不要逐行注水。
 - 不要在没有中文说明的情况下抛出块级公式。
-- 不要用 L2 证据下 L3 断言（如只跑通 `TestModel` 就断言行为正确）。
+- 不要用 L2 证据下 L3 断言（如只跑通测试模型就断言行为正确）。
 - 不要把 track/verify/source/FIGURE 注解带进 `.tex`/`.typ`/XHTML。
 - 不要擅自 commit/发布到 GitHub，除非用户明确要求。

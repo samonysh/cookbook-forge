@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.4.0"><img src="https://img.shields.io/badge/version-1.4.0-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.5.0"><img src="https://img.shields.io/badge/version-1.5.0-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -44,8 +44,8 @@
 - 📝 **MDX 为权威中间格式**：每章一个 `.mdx`，便于后续多格式转换
 - ⚙️ **双转换路径**：LLM 逐章转换（三个 Prompt）与 `mdx2book.mjs` 确定性转换并存；后者按块解析、正文逐字保留，图表使用显式编号 `fig-NN-M`，适合结构固定的章节
 - 🧾 **写作过程可审计**：四类 HTML 注解（`track` / `verify` / `source` / `FIGURE`）在 MDX 内保留、转换时统一剥离；`chapter-lint.mjs` 校验 N.0–N.10 骨架、图位、验证等级与逐块实测记录
-- 📊 **双线比例实测**：`ratio-count.mjs` 按 `track` 统计正文 CJK 字数（剔除代码块与 HTML 注释），回填 frontmatter 并输出报告
-- 📐 **篇幅按覆盖度定**：A0/A1 后按模块数 × 递归深度 × 概念密度定全书总量；下限 5 万 CJK（不含 meta），不设逐章固定预算，章长按模块权重分配
+- 📊 **双线比例实测**：`ratio-count.mjs` 按 `track` 统计正文 CJK（剔除代码块、HTML 注释与 meta；表格内 CJK 按 1/2 计数），回填 frontmatter 并输出报告；对「有表但成段论述 <120 字」或「表格折算占比 >60% 且成段论述 <300 字」的小节报 WARN
+- 📐 **篇幅按覆盖度定**：A0/A1 后按模块数 × 递归深度 × 概念密度定全书总量；下限 5 万 CJK（`body3` 口径：不含 meta，表格按 1/2 计数），不设逐章固定预算，章长按模块权重分配
 - 🖼 **封面闸门**：无素材时用 diagram-design 画全书架构图（spine / 模块分群 / 依赖方向）；`latex-check.mjs` 校验封面存在、1280×1024、非空白
 - 🎨 **丰富图表**：HTML 图源（`assets/diagram-style/` 导出 SVG）/ mermaid / plantuml / drawio / excalidraw / chart，按用户偏好选用
 - 📖 **MDX + 四种最终格式**（可组合）：
@@ -89,10 +89,10 @@ cookbook-forge/
 │   ├── epub-check.mjs                    # EPUB 静态 lint + 每章 XML 良构校验 + 包结构检查
 │   ├── mdx2book.mjs                      # 确定性 MDX -> Typst/LaTeX/EPUB 章节转换（显式图号）
 │   ├── chapter-lint.mjs                  # 章节结构 lint（N.0–N.10、标记、图位、实测记录）
-│   ├── ratio-count.mjs                   # 双线比例统计（按 track 计 CJK，剔除代码块与注释）
+│   ├── ratio-count.mjs                   # 双线比例 + 正文口径统计（表格 1/2，only-table WARN）
 │   ├── render-figures.mjs                # 图源 -> SVG 导出与图位校验
 │   ├── render-diagrams.mjs               # 图表渲染（mermaid/plantuml -> SVG）
-│   ├── word-count.mjs                    # 字数统计
+│   ├── word-count.mjs                    # 字数统计（与 ratio-count 共用正文口径）
 │   ├── epub-zip.mjs                      # EPUB 合规打包
 │   ├── subset-fonts.mjs                  # 字体子集化
 │   ├── optimize-formula-images.mjs       # 公式图片修复
@@ -143,7 +143,7 @@ cookbook-forge/
 阶段 1  资料采集     → URL/GitHub/arxiv/PDF/EPUB/本地/网络补充 → metadata/sources.md
 阶段 2  大纲设计     → 全景图 + 章节目录 → metadata/outline.md ⚠️ 必须用户确认
 阶段 3  逐章 MDX     → 每章 .mdx：引入/地图/原理/实用/Recipes/陷阱/要点/延伸阅读
-阶段 4  篇幅校准     → 按覆盖度扩写 Recipes/源码解析/速查表/附录；下限 5 万 CJK，不设逐章预算
+阶段 4  篇幅校准     → 按覆盖度扩写 Recipes/源码解析/速查表/附录；下限 5 万 CJK（body3 口径，表格按 1/2），不设逐章预算
 阶段 5  多格式转换（每种格式生成后子 agent 检查修复）
   5a.  MDX          （默认）
   5b.  ElegantBook  -> xelatex 两遍编译 -> PDF
@@ -183,10 +183,11 @@ cookbook-forge/
 - [ ] 代码块全部带语言标识 + 中文注释
 - [ ] 图表有编号、标题、正文引用、说明段落
 - [ ] 章节骨架：`chapter-lint.mjs --strict` 退出码 0（N.0–N.10、四类注解、图位与 frontmatter 一致、逐块实测记录）
-- [ ] 双线比例：`ratio-count.mjs --write` 报告存在，`ratio` 已回填 frontmatter
+- [ ] 双线比例：`ratio-count.mjs --write` 报告存在，`ratio` 已回填 frontmatter；「只有表格 / 成段论述不足」WARN 已处理
 - [ ] 四类 HTML 注解（track / verify / source / FIGURE）未泄漏到 `.tex` / `.typ` / XHTML
 - [ ] 跨章引用为可点击链接
-- [ ] 全书 ≥5 万 CJK（不含 meta）；总量与模块权重一致，超出同类参考区间已写明理由
+- [ ] 全书 `body3` ≥5 万 CJK（只算正文：剔除代码块、HTML 注释、meta；表格按 1/2 计数）；总量与模块权重一致，超出同类参考区间已写明理由
+- [ ] 三端产物不入库：书籍仓库不含 `*.pdf`、`*.epub` 与 `latex/`、`typst/`、`epub/`、`mdx/` 构建目录；发布走 tag + Release 附件
 - [ ] 封面通过 `latex-check.mjs` 闸门（存在、1280×1024、非空白）
 - [ ] PDF：`latex-check.mjs --fix --compile` 退出码 0；xelatex 编译通过；无 Markdown 残留
 - [ ] Nextra：`npm run build` 通过；Docker healthy；`/zh` 200
@@ -194,6 +195,10 @@ cookbook-forge/
 - [ ] Typst：`typst-check.mjs --fix --compile` 退出码 0；typst compile 零 error；无 Markdown/LaTeX 语法残留；数学块内无裸中文/裸缩写；中文字体正确配置
 - [ ] Typst：`main.typ` 包含 `@preview/ilm:<version>` 与 `#show: ilm.with(...)`；缺失时 `--fix` 可自动重新补充
 - [ ] 图表：原始源码保留在 diagrams-src/，渲染产物在 figures/
+
+### 书籍产物不入库
+
+本 Skill 仓库只收录 Skill 本体（`scripts/`、`assets/`、`references/` 与文档）。PDF、EPUB 与 Typst/LaTeX/EPUB 构建目录（`latex/`、`typst/`、`epub/`、`mdx/`）一律不入库；书籍工程需在自己的 `.gitignore` 中排除这些目录与 `*.pdf`、`*.epub`。需要发布时用 git tag + GitHub Release 附件分发二进制产物，不把二进制提交进仓库。
 
 ## 安装与发布
 
@@ -216,8 +221,8 @@ npx skills add samonysh/cookbook-forge
 打包发布：
 
 ```bash
-node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.4.0.zip
-skillhub publish ./cookbook-forge --changelog "v1.4.0: 新增确定性转换器、章节结构 lint、双线比例统计、图表渲染管线与前置分析方法论"
+node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.5.0.zip
+skillhub publish ./cookbook-forge --changelog "v1.5.0: 字数口径改为正文/表格 1/2、双线比例降级为事后校准、新增表格替代论述告警、三端产物不入库"
 ```
 
 ## License
