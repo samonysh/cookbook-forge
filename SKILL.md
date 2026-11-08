@@ -71,6 +71,10 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `scripts/epub-check.mjs` - EPUB 工程质量检查 CLI：静态 lint + 每章 XML 良构校验（纯 JS 零依赖，`_lint_report.json`）+ 安全规则自动修复（`--fix`）+ 包结构检查（manifest/spine/nav/mimetype，`_check_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/epub-lint.mjs`。
 - `scripts/typst-fonts-check.mjs` - P1-4 字体可用性预检：运行 `typst fonts` 与配置 `fonts` 栈比对，报告缺失字体（编译前预检一次即可避免中文豆腐块）。
 - `scripts/kroki-render.mjs` - PlantUML 通过 Kroki.io 远程渲染（deflate+base64url 编码 GET，含隐私提示）。
+- `scripts/render-figures.mjs` - 图位与图源对齐：扫描 `<!-- FIGURE: fig-NN-M ... -->`，优先调用 `assets/diagram-style/export_svg.py` 把 `mdx/public/diagrams-src/<id>.html` 导出为 `mdx/public/figures/<id>.svg`，校验正文引用与每章 ≥2 图，报告写 `metadata/figure-report.txt`。
+- `scripts/ratio-count.mjs` - 双线比例度量：按 `<!-- track: app|principle|synthesis|meta -->` 汇总各轨 CJK 字数，对比 frontmatter/大纲目标比例；`--write` 把实测结果回填 frontmatter，报告写 `metadata/ratio-report.txt`。
+- `scripts/chapter-lint.mjs` - 章节结构 lint：V1 验证等级标记、V2 图位语法、V3 frontmatter figures 一致性、V4 逐块实测记录，以及 F1 图产物/每章下限、C1 代码中文注释、M1 公式中文说明、R1 材料点评禁语（WARN）、N1 章末参考小节。
+- `scripts/mdx2book.mjs` - **确定性**的 MDX -> Typst / LaTeX / EPUB XHTML 章节转换器（`--format typst|latex|epub|all --root <book>`）：按块解析标题、GFM 表格、围栏代码、图位与图/表交叉引用，正文逐字保留，只做语法层转换。图表使用显式编号（`fig-NN-M` 去前导零得到 `<fig-C-M>` / `fig:C-M`），不依赖后处理自动计数器，与 LLM 路径的 numbering 规则等价；适合结构固定（H2/H3、无 JSX/公式）的章节，是 5b/5d/5e 的低成本替代路径。
 - `assets/prompts/mdx-to-latex.md` - LLM 转换 MDX->LaTeX 的系统 Prompt 模板（定义所有映射规则）。
 - `assets/prompts/mdx-to-epub.md` - LLM 转换 MDX->EPUB XHTML 的系统 Prompt 模板。
 - `assets/prompts/mdx-to-typst.md` - LLM 转换 MDX->Typst 的系统 Prompt 模板（定义 Typst 原生语法映射规则，严禁混用 LaTeX 语法）。
@@ -80,7 +84,8 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `assets/typst-default.config.json` - Typst 转换流水线默认配置（标题/图表编号规则、figure label 前缀、callout 调色板与类型映射、字体栈）。消费方：lmdx2typst.mjs（模板/callout/prompt 生成）、typst-check.mjs 与 typst-optimize.mjs（优化 pass）。项目级覆盖：工作目录 `typst.config.json` 或 `--config <path>`。
 - `assets/nextra-template/scripts/scaffold-nextra.mjs` - 把模板里的 `{{BOOK_SLUG}}`/`{{BOOK_TITLE}}`/`{{GITHUB_REPO_URL}}`/`{{YEAR}}` 占位符替换为真实值，自动拷贝 mdx->pages/zh、figures->public/figures、生成 pages/en 英文骨架。
 - `assets/stylesheet.template.css` / `assets/stylesheet.formula-image.css` - EPUB 样式表。
-- `assets/template-mdx/` - 单章 MDX 模板（含 `$$` 块级公式写法约定）。
+- `assets/template-mdx/` - 单章 MDX 模板（N.0–N.10 骨架，含 track/verify/source 标记、FIGURE 图位、`$$` 公式与中文说明约定）。
+- `assets/diagram-style/` - vendored diagram-design 出图样式：`export_svg.py`（HTML→SVG，纯 Python）、`style-tokens.md`（颜色/字体 token，导出底色纯白）、`LICENSE`（MIT 许可与来源说明）。
 - `assets/nextra-template/` - Nextra 站点骨架（已启用 mermaid + KaTeX）。
 - `references/style-guide-oreilly.md` - O'Reilly CookBook 行文布局参考。
 - `references/style-guide-springer.md` - Springer Handbook 行文布局参考。
@@ -100,7 +105,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 2. **架构先行**：先出整体全景图与章节目录，与用户对齐后再逐章写作。
 3. **每章一个 MDX**：使用 MDX（MDXJS + unified）作为权威中间格式，每章独立文件，便于多格式转换。
 4. **内容深入**：兼顾原理与实用，包含背景引入、章节地图、正文、代码（带注释）、图表、表格、Recipe、陷阱、要点总结、参考文献。
-5. **图表丰富**：至少每章 1–2 张图（mermaid/plantuml/drawio/excalidraw/chart 视用户要求而定），表格按需。
+5. **图表丰富**：条件触发 + 每章硬下限 2 张图。一个 H2 涉及 ≥3 个对象且存在先后/分层/分支/状态迁移时**必须**配图；禁止为凑数画装饰图。图源默认 diagram-design 的 HTML→SVG，mermaid/plantuml 围栏保留兼容。
 6. **字数可配置**：默认 8 万字以上；可按需求调整（短篇手册 2–3 万字，综述 3–5 万字，完整 CookBook 8–15 万字）。
 7. **多格式输出**：默认 MDX；按用户指定输出 `mdx/`、`latex-pdf/`、`nextra-site/`、`epub/`、`typst/` 子文件夹。
 
@@ -260,23 +265,52 @@ references:
 
 参考 `references/style-guide-oreilly.md` 与 `references/style-guide-springer.md`，每章按如下模板组织（来自 `assets/template-mdx/chapter-template.mdx`）：
 
-1. **章节引入（Why this matters）**：告诉读者为什么需要这一章，解决什么问题，这一章在整体中的位置（链接到全景图章）。
-2. **本章地图（Chapter Map）**：用 callout 卡片列出章内小节结构。
-3. **正文小节**：每个小节：
-   - 原理（Why / How it works）
-   - 实用（How to use it / 代码示例，**代码必须带中文注释**）
-   - 表格（对比、参数、配置项）
-   - 图（mermaid/plantuml/drawio/excalidraw/chart）
-   - 关键术语（首次出现加粗）
-4. **Recipes**（可选但推荐）：任务导向的小案例，包含 Problem / Solution / Discussion / See Also。
-5. **常见陷阱（Pitfalls）**：callout 警告框，列出踩坑点。
-6. **章节总结（Key Points）**：callout 要点框，3–7 条要点。
-7. **延伸阅读（See also）**：指向其他章节与外部资料。
-8. **参考文献**：章末列出本章引用的 sources 条目。
+章节统一采用 `N.0–N.10` 骨架（`N` 为章号）：
+
+| 小节 | 内容 | 轨道 |
+|---|---|---|
+| `N.0` | 章节引入、本章地图、阅读路线 | `meta` |
+| `N.1–N.3` | 应用线：任务、最小可用写法、常见变体 | `app` |
+| `N.4–N.7` | 原理线：机制、控制流、数据结构、边界条件 | `principle` |
+| `N.8–N.9` | 综合段：双向映射、选型与陷阱、要点总结 | `synthesis` |
+| `N.10` | 本章参考 | `meta` |
+
+每章必须有：章节引入、本章地图、正文、代码（带中文注释）、图表、常见陷阱、要点总结、`N.10 本章参考`。
+
+#### 写作硬约束（阶段 3 必读）
+
+以下七条是阶段 3 的硬性约束，违反任一条都应在阶段 6 被 lint 或人工复核拦下。
+
+1. **轨道标记**：每个 H2 上一行写 `<!-- track: app|principle|synthesis|meta -->`。`N.0`/`N.10` 用 `meta`；应用线 `app`；原理线 `principle`；综合段 `synthesis`。阶段 4 用 `ratio-count.mjs` 汇总，不允许写前估算。
+2. **验证等级**：每个 ```python/```py 代码块前 3 行内写 `<!-- verify: L1|L2|L3 -->`。L1 = 导入与语法通过；L2 = 端到端跑通（含离线 `TestModel` 等路径）；L3 = 行为可信（真实模型或可验证的行为断言）。只到 L2 的示例不得对行为下断言，只能陈述「跑通」。逐块记录写 `metadata/verify/chNN.txt`。
+3. **配图**：一个 H2 涉及 ≥3 个对象且存在先后、分层、分支或状态迁移时**必须**配图；每章硬下限 2 图；禁止为凑数画装饰图。图源优先 diagram-design 的 HTML→SVG（`assets/diagram-style/export_svg.py`），HTML 放 `mdx/public/diagrams-src/<id>.html`，导出 `mdx/public/figures/<id>.svg`；mermaid/plantuml 围栏保留兼容。
+4. **代码中文注释**：关键行、关键参数用中文注释说明意图，不逐行注水。
+5. **公式中文说明**：每个块级公式后说明符号含义，以及这个式子到底在说明什么。
+6. **正文不点材料 + 章末参考**：正文不得出现「你提供的文档有偏差」「原文写法有误」这类针对材料来源的表述，也不得引用材料瑕疵展开。每章末尾独立开 `N.10 本章参考`，简短列出本章参考的内容、提供了什么、与本章的关系；不并入 `N.9`。
+7. **源码证据单独标注**：原理线允许、也鼓励摘录关键源代码作为机制证据，用来解释对象结构、调度顺序和不变量；但只摘关键片段，并说明它证明了什么，不整段贴。源码摘录用 `<!-- source: <路径>#L<a>-L<b> | 证明：<结论> -->` + 紧随的代码围栏标注；它不是可运行示例，**不写 `verify: Lx`，也不进入 `metadata/verify/chNN.txt`**，不能冒充验证等级。应用线不得依赖源码摘录，只能引用公开 API 与可观测输出（`result.output`、`usage`、消息序列、异常类型等）。`chapter-lint` 会把带 `source` 标记的块排除在 V1/C1/V4 之外单独计数。
 
 #### 图表规范
 
-**图表生成规则**：在撰写章节内容时，使用 Task 工具调用子 agent 生成图表。子 agent 根据章节内容需求，生成 mermaid/plantuml/drawio/excalidraw/chart 等类型的图表源码，并将源码保存到 `mdx/public/diagrams-src/` 目录。**所有图表必须保留原始格式源码，同时渲染为 SVG 或 PNG 格式后引用到 MDX、EPUB、LaTeX、Typst 中。**
+**默认路径：diagram-design HTML→SVG（主路径）**
+
+1. 按 `assets/diagram-style/style-tokens.md` 写 HTML：`<style>` + `<svg viewBox="...">`；`paper` 在构图时直接写成纯白 `#ffffff`（不依赖导出脚本替换，vendored 脚本保持原样），`ink` `#2d3142`、`accent` `#bf4520` 不改。
+2. HTML 源存 `mdx/public/diagrams-src/<id>.html`（`id` 形如 `fig-03-1`）。
+3. 运行 `node scripts/render-figures.mjs --root=<book> --strict`，调用 `assets/diagram-style/export_svg.py --system-fonts` 导出 `mdx/public/figures/<id>.svg`；已有 SVG 时直接复用。
+4. MDX 中先写图位注解，再引用图片，再写图题：
+
+```markdown
+<!-- FIGURE: fig-03-1 | decision-tree | 输出模式选择树 | 依据 N.1–N.3 的对比 -->
+
+![图 3-1　输出模式选择树](/figures/fig-03-1.svg)
+
+**图 3-1**　输出模式选择树
+```
+
+图位语法固定为 `<!-- FIGURE: fig-NN-M | type | 内容 | 依据 ... -->`，`type` 取 `architecture / flowchart / sequence / state-machine / decision-tree / timeline / matrix / layered`。每章 frontmatter 的 `figures` 必须与正文图位 id 集合一致。
+
+**兼容路径**：mermaid/plantuml/drawio/excalidraw/chart 仍可用。mermaid/plantuml 围栏由 `scripts/lib/diagram-renderer.mjs` 渲染；若围栏前 5 行有 `<!-- FIGURE: fig-NN-M ... -->`，产物命名为 `fig-NN-M.svg`，否则沿用旧 `diagram-<hash>.svg`，旧书行为不变。
+
+**链路要求**：所有图表必须保留原始源码（`diagrams-src/`）和渲染产物（`figures/`）；MDX、EPUB、LaTeX、Typst 统一引用渲染后的 SVG/PNG。track/verify/source/FIGURE 都是 HTML 注释，三个转换器会通过 `stripHtmlComments()` 剥离，不得泄漏到 `.typ`/`.tex`/XHTML。
 
 图表类型与处理方式：
 
@@ -296,6 +330,7 @@ references:
 - 有编号（如图 1-1）和标题
 - 在正文中被引用（"如图 1-1 所示"）
 - 有说明段落
+- 通过 `render-figures.mjs` 检查（每章 ≥2 图，图文件与正文引用都存在）
 
 #### 表格规范
 
@@ -306,9 +341,35 @@ references:
 #### 代码规范
 
 - 使用围栏代码块 + 语言标识（```python / ```typescript 等）。
-- 代码必须有中文注释解释关键步骤。
+- 代码必须有中文注释解释关键步骤，关键行、关键参数写清意图，不逐行注水。
 - 代码块可加标题注释（如 `# file: src/core/engine.py`）。
 - 长代码（>50 行）拆为多块，每块前后有解释文字。
+- 每个 python 块前标注验证等级（见「写作硬约束」第 2 条），并同步写 `metadata/verify/chNN.txt`。
+
+**源码证据块**（只在原理线使用，见「写作硬约束」第 7 条）：
+
+```markdown
+<!-- source: yourpkg/_agent_graph.py#L120-L148 | 证明：请求节点在每轮循环中先读历史再向模型发请求 -->
+
+```python
+# 摘自 _agent_graph.py：只保留决定「何时发请求」的分支
+...
+```
+```
+
+源码块用同一个 ```python 围栏以获得高亮，但因为没有 `<!-- verify: Lx -->`，`chapter-lint` 会按 `source` 标记把它识别为证据块，不计入 V1/C1/V4；正文要另起一句说明这段代码证明了什么，不能只贴代码。
+
+#### 公式规范
+
+- 行内公式用 `$...$`，块级公式用 `$$ ... $$`（KaTeX 兼容）。
+- 每个块级公式后必须有一段中文说明：逐个解释符号含义，并说明这个式子到底在描述什么关系。
+- 正文断言强度不得超过该处证据等级：只到 L2 的示例，不得写成「证明该行为正确」。
+
+#### 参考小节规范
+
+- 每章末尾独立开 `## N.10 本章参考`，`track: meta`，不并入 `N.9`。
+- 每条写清：参考了什么、提供了什么、与本章的关系。
+- 不评论材料瑕疵，不出现「文档有偏差」「原文有误」这类表述。
 
 #### MDX 语法注意
 
@@ -317,11 +378,13 @@ references:
 - 数学公式：行内 `$E=mc^2$`，块级 `$$...$$`（KaTeX 兼容）。
 - 所有跨章引用用 markdown 链接形式：`[见第 3 章](./ch03-xxx.mdx)`。
 
-### 阶段 4：字数统计与补足
+### 阶段 4：字数统计与双线比例回填
 
 写完所有章节后：
 
 - 用脚本统计每章中文字符、英文词数，生成 `metadata/word-count.txt`。
+- **双线比例不靠写前估算**：运行 `node scripts/ratio-count.mjs --root=<book> --write`。脚本按 `<!-- track: ... -->` 汇总各轨 CJK 字数，输出实际比例、与大纲/`frontmatter.ratio` 目标的偏差和超阈值提示，并把实测结果回填到 frontmatter 的 `ratio`。报告写 `metadata/ratio-report.txt`，阶段 6 质检直接消费这份报告。
+- **口径要记住：应用线字数按正文 CJK 计，代码块与 HTML 注释不计入。** 因此「用代码承载应用知识、正文只写两句」会让所有章节系统性偏原理线——代码越多，应用线占比反而越低。应用线必须靠正文把**任务、参数怎么选、边界、排错、最小验证**讲清楚；代码只负责可运行证据，不承担讲解。发现应用线占比偏低时，补的是正文任务链与判断依据，不是再贴一段代码，也不是削薄原理线。
 - 若未达目标字数，按以下优先级扩写（禁止空话填充）：
   1. 新增 Recipes（任务导向）
   2. 加深源码/原理分析
@@ -347,7 +410,8 @@ references:
 
 - 直接保留 `mdx/` 目录。
 - 生成 `mdx/_meta.ts`（章节顺序 + separator 分组）。
-- 图表全部就位：mermaid 保留代码围栏，其他图表渲染为 SVG/PNG。
+- 图表全部就位：`mdx/public/diagrams-src/<fig-NN-M>.html` 为源，`mdx/public/figures/<fig-NN-M>.svg` 为产物；mermaid 保留代码围栏，其他图表引用渲染后的 SVG/PNG。
+- **HTML 注释不进入输出格式**：track/verify/source/FIGURE 注解由 `stripHtmlComments()` 在 `lmdx2tex.mjs` / `lmdx2typst.mjs` / `lbuild-epub.mjs` 读取 raw 时剥离；MDX 本身保留注解。
 - 输出 README 说明 MDX 结构与后续转换方法。
 - **质量检查**：子 agent 检查所有 MDX 文件 frontmatter 完整性、`_meta.ts` 章节顺序、图表引用路径正确性、代码块语言标识；修复发现的问题。
 
@@ -411,10 +475,14 @@ references:
 ### 阶段 6：最终交付
 
 1. 在 `metadata/word-count.txt` 写入最终统计（中文字符、英文词数、估算总字、章节数、Recipe、表格、代码块、图表数）。
-2. 在 `metadata/sources.md` 列出所有参考资料。
-3. 在根目录写中英文 README（见下文）。
-4. 清理中间构建目录（`epub/build/`、`latex/latex/.aux` 等）。
-5. 最终回复给用户：
+2. **结构闸门（两份报告）**：
+   - `node scripts/ratio-count.mjs --root=<book> --write` 生成的 `metadata/ratio-report.txt`：实际比例、偏差、超阈值提示；`ratio` 已回填。
+   - `node scripts/chapter-lint.mjs --root=<book> --strict` 生成的 `metadata/chapter-lint.txt`：V1–V4 + F1/C1/M1/R1/N1 无 ERROR；R1 的 WARN 必须人工复核。
+3. **断言强度校验**：逐章核对正文断言是否超过该代码块的验证等级。L1 只能陈述「导入/语法通过」，L2 只能陈述「跑通」，L3 才能陈述行为结论。`metadata/verify/chNN.txt` 是逐块实测证据。
+4. 在 `metadata/sources.md` 列出所有参考资料。
+5. 在根目录写中英文 README（见下文）。
+6. 清理中间构建目录（`epub/build/`、`latex/latex/.aux` 等）。
+7. 最终回复给用户：
    - 各输出格式子文件夹链接
    - 章节数 / 字数 / 图表数统计
    - 本地预览命令（Nextra：`cd nextra-site && npm install && npm run dev`；PDF：直接打开 PDF；EPUB：直接打开；Typst：`cd typst && typst compile main.typ`）
@@ -430,8 +498,14 @@ references:
 - [ ] 大纲已与用户对齐
 - [ ] 每章一个 MDX，frontmatter 完整
 - [ ] 每章都有引入、章节地图、要点总结、延伸阅读
+- [ ] 每章 `N.0–N.10` 骨架完整，`N.10 本章参考` 独立存在
+- [ ] 每个 H2 前有 `track:` 标记；`ratio-count.mjs --write` 已回填 `ratio`，报告无超阈值告警
+- [ ] 每个 python 块前有 `verify: L1/L2/L3`，`metadata/verify/chNN.txt` 块数与等级一致
+- [ ] 正文断言强度不超过对应代码块的验证等级
 - [ ] 代码块全部带语言标识 + 关键中文注释
-- [ ] 图表全部有编号、标题、正文引用、说明段落
+- [ ] 每个块级公式后有中文说明（符号含义 + 式子说明）
+- [ ] 每章 ≥2 图；图有 `fig-NN-M.svg` 产物、正文引用、编号标题、说明段落
+- [ ] 正文无「材料有偏差/原文有误」类表述（R1 WARN 已人工复核）
 - [ ] 表格无裸 LaTeX/Markdown 残留（在 MDX 阶段用 GFM 表格）
 - [ ] 跨章引用都是可点击 markdown 链接
 - [ ] 字数达标或明确说明缺口
@@ -502,6 +576,10 @@ references:
 | LaTeX/EPUB 整书检查一次只报一章的错，修复慢 | 串行整书检查 | `latex-check.mjs --compile` / `epub-check.mjs` 以章节为单位并行检查，N 章错误一次全暴露 |
 | EPUB 阅读器打不开/白屏 | XHTML 非 XML 良构（标签未闭合/未转义 `&`） | `epub-check.mjs` 每章良构校验定位行号；`--fix` 自动修裸 `&`/`className` |
 | 图表在 PDF/EPUB 中不显示 | 只保留了源码未渲染 | 必须同时渲染 SVG/PNG 到 figures/ 并在正文中引用 |
+| `.typ`/`.tex`/XHTML 里出现 `<!-- track: ... -->` | 转换器未剥离 HTML 注释 | `mdx-utils.stripHtmlComments()` 已在三个转换器接入；回归时 grep `<!--` 应为 0 |
+| `chapter-lint` 报 F1 图文件缺失 | 只有 FIGURE 注解，没有 HTML 源或 SVG | 补 `diagrams-src/<id>.html` 后跑 `render-figures.mjs --strict` |
+| 双线比例与大纲不一致 | frontmatter `ratio` 是写前估算 | 跑 `ratio-count.mjs --write`，以报告实测值为准 |
+| 正文说「证明行为正确」但只到 L2 | 断言超过验证等级 | 降级为「跑通」；要下行为结论需补 L3 证据 |
 
 ---
 
@@ -515,9 +593,9 @@ references:
 2. 设计章节大纲（含全景图、每章目标/字数/图表/来源）-> metadata/outline.md
 3. AskUserQuestion 与用户对齐 outline
 4. 准备封面图片（1280×1024，记录来源）
-5. 逐章写作 mdx/*.mdx（含引入/地图/原理/实用/Recipes/陷阱/要点/延伸阅读）
-6. 生成 mdx/public/diagrams-src/ 下的图表源 + 渲染到 mdx/public/figures/
-7. 字数统计；不足则扩写
+5. 逐章写作 mdx/*.mdx（含 track/verify 标记、N.0–N.10、代码中文注释、公式说明、N.10 参考）
+6. 生成 mdx/public/diagrams-src/<fig-NN-M>.html + `render-figures.mjs` 导出 figures/
+7. 字数统计；`ratio-count.mjs --write` 回填比例；`chapter-lint.mjs --strict` 结构质检；不足则扩写
 8. 生成 mdx/_meta.ts
 9a. [可选] **LLM 驱动** MDX -> ElegantBook LaTeX（scripts/lmdx2tex.mjs + Task 子 agent 逐章转换），xelatex 两遍编译出 PDF。详见 references/stage-5b-latex.md
 9b. [可选] 初始化 Nextra 站点，拷贝 mdx，渲染图表，npm run build + Docker 验证。详见 references/stage-5c-nextra.md
@@ -559,4 +637,10 @@ references:
 - 不要在 Typst 输出中混用 LaTeX 语法（如 `$$...$$`、`\frac{}{}`、`\begin{}` 等），必须使用 Typst 原生语法。
 - 不要在 Typst 输出中使用 Markdown 语法（如 `#` 标题、`**bold**`、`*italic*` 等）。
 - 不要在生成图表时只保留渲染产物而不保留原始源码（必须同时存 `diagrams-src/` 和 `figures/`）。
+- 不要为凑图数画装饰图；条件触发不满足时，宁可不画。
+- 不要在正文点评材料来源（如「你提供的文档有偏差」「原文写法有误」）；参考内容统一放 `N.10 本章参考`。
+- 不要在代码块里省略关键中文注释，也不要逐行注水。
+- 不要在没有中文说明的情况下抛出块级公式。
+- 不要用 L2 证据下 L3 断言（如只跑通 `TestModel` 就断言行为正确）。
+- 不要把 track/verify/source/FIGURE 注解带进 `.tex`/`.typ`/XHTML。
 - 不要擅自 commit/发布到 GitHub，除非用户明确要求。

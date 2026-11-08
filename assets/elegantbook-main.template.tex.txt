@@ -1,6 +1,6 @@
 % ElegantBook CookBook 主文件
 % 由 lmdx2tex.mjs 自动生成 — 请勿手动编辑
-\documentclass[12pt,a4paper,openany]{elegantbook}
+\documentclass[12pt,a4paper,openany,lang=cn]{elegantbook}
 
 % ==================== 书籍元信息 ====================
 \title{__BOOK_TITLE__}
@@ -95,6 +95,11 @@
 \begin{document}
 \maketitle
 \tableofcontents
+
+% elegantbook 的封面页把页码设成 \pagenumbering{Alph}，正文不清回 arabic 的话，
+% 页码超过 Z（第 27 页）就会触发 "Counter too large"，页眉与目录页码同时崩掉。
+\clearpage
+\pagenumbering{arabic}
 
 __CHAPTER_INPUTS__
 

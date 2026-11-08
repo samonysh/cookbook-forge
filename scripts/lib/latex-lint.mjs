@@ -11,7 +11,8 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-const VERB_ENV_RE = /\\(begin|end)\{(lstlisting|verbatim|Verbatim|minted|alltt)\}/;
+// codeblock 是 ElegantBook 模板用 tcolorbox 定义的源码环境，内容为 verbatim，同样要跳过。
+const VERB_ENV_RE = /\\(begin|end)\{(lstlisting|verbatim|Verbatim|minted|alltt|codeblock)\}/;
 const COMMENT_RE = /^\s*%/;
 
 // ---------- verbatim 环境掩码 ----------

@@ -317,6 +317,31 @@ export function isInsideString(text, idx) {
   return inStr;
 }
 
+/**
+ * 判断字符位置是否落在行内 raw（`...`）内部。
+ * 行内 code 里的 @、\、** 等都是字面量，不参与引用/残留检查。
+ * @param {string} text
+ * @param {number} idx
+ * @returns {boolean}
+ */
+export function isInsideInlineRaw(text, idx) {
+  const lineStart = text.lastIndexOf("\n", Math.max(idx - 1, 0)) + 1;
+  let ticks = 0;
+  for (let i = lineStart; i < idx; i++) {
+    if (text[i] === "`" && text[i - 1] !== "\\") ticks++;
+  }
+  return ticks % 2 === 1;
+}
+
+/**
+ * 把行内 raw 内容替换为等长空格，保持字符偏移不变，供逐行残留检查使用。
+ * @param {string} line
+ * @returns {string}
+ */
+export function maskInlineRaw(line) {
+  return line.replace(/(`+)[\s\S]*?\1/g, (m) => " ".repeat(m.length));
+}
+
 // ---------- 表格 / callout 解析助手（P0 表格质量 + callout 健壮性） ----------
 
 /** 长表格行数阈值（可被 config.tables.splitThreshold 覆盖）。 */
@@ -891,33 +916,35 @@ export async function lintText(text, opts = {}) {
     if (l.includes("LLM_CONVERSION_PENDING")) return; // 已报
     if (COMMENT_RE.test(l)) return;
 
-    if (l.includes("$$")) {
+    // 行内 raw（`...`）里的内容是字面量，不参与 Markdown/LaTeX 残留判断
+    const lPlain = maskInlineRaw(l);
+    if (lPlain.includes("$$")) {
       push(i + 1, "error", "md-block-math",
         "Markdown 块级公式 $$ 残留：应转为 Typst 块级公式 `$ ... $`（两侧留空格）");
     }
     latexCmdRe.lastIndex = 0;
-    const cmds = l.match(latexCmdRe);
+    const cmds = lPlain.match(latexCmdRe);
     if (cmds) {
       push(i + 1, "error", "latex-cmd",
         `LaTeX 命令残留：${[...new Set(cmds)].slice(0, 3).join(" ")}${cmds.length > 3 ? " …" : ""}（应转为 Typst 原生语法）`);
     }
-    if (/^#{1,6}\s+\S/.test(l)) {
+    if (/^#{1,6}\s+\S/.test(lPlain)) {
       push(i + 1, "error", "md-heading",
         "Markdown 标题 # 残留：Typst 中 # 是 code 入口，标题应使用 = / == / ===");
     }
-    if (/\*\*[^*\n]+\*\*/.test(l)) {
+    if (/\*\*[^*\n]+\*\*/.test(lPlain)) {
       push(i + 1, "error", "md-bold", "Markdown 粗体 ** 残留：Typst 粗体是 *...*（单星）");
     }
-    if (/^\s*\|[-\s:|]+\|\s*$/.test(l)) {
+    if (/^\s*\|[-\s:|]+\|\s*$/.test(lPlain)) {
       push(i + 1, "error", "md-table",
         "Markdown 表格残留：应转为 Typst table() + table.hline() booktabs 风格");
     }
-    const mdImg = l.match(/!\[([^\]\n]*)\]\(([^)\n]+)\)/);
+    const mdImg = lPlain.match(/!\[([^\]\n]*)\]\(([^)\n]+)\)/);
     if (mdImg) {
       push(i + 1, "warn", "md-image",
         `Markdown 图片 ![...](${mdImg[2]}) 残留：应转为 #figure(image(...), caption: [...])`);
     } else {
-      const mdLink = l.match(/\[([^\]\n]*)\]\((https?:\/\/[^)\n]+)\)/);
+      const mdLink = lPlain.match(/\[([^\]\n]*)\]\((https?:\/\/[^)\n]+)\)/);
       if (mdLink) {
         push(i + 1, "warn", "md-link",
           `Markdown 链接残留：应转为 #link("${mdLink[2]}")[${mdLink[1]}]`);
@@ -1054,7 +1081,7 @@ export async function lintText(text, opts = {}) {
     while ((rm = refRe.exec(normalized)) !== null) {
       const line = (normalized.slice(0, rm.index).match(/\n/g) || []).length + 1;
       if (rawMask2[line - 1] || mathLines.has(line) || COMMENT_RE.test(lines[line - 1])) continue;
-      if (isInsideString(normalized, rm.index)) continue;
+      if (isInsideString(normalized, rm.index) || isInsideInlineRaw(normalized, rm.index)) continue;
       const prefix = rm[1] === "图" ? figPrefix : tabPrefix;
       const label = `${prefix}-${rm[2]}-${rm[3]}`;
       if (!labelIndex.has(label)) {
@@ -1070,7 +1097,7 @@ export async function lintText(text, opts = {}) {
       while ((am = atRe.exec(normalized)) !== null) {
         const line = (normalized.slice(0, am.index).match(/\n/g) || []).length + 1;
         if (rawMask2[line - 1] || mathLines.has(line) || COMMENT_RE.test(lines[line - 1])) continue;
-        if (isInsideString(normalized, am.index)) continue;
+        if (isInsideString(normalized, am.index) || isInsideInlineRaw(normalized, am.index)) continue;
         // `@scope/package` 是 Typst 正文中的 npm 包名，不是 @label 引用。
         if (normalized[am.index + am[0].length] === "/") continue;
         if (!labelIndex.has(am[1])) {

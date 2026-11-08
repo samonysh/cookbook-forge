@@ -13,7 +13,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
-import { parseFrontmatter } from "./lib/mdx-utils.mjs";
+import { parseFrontmatter, stripHtmlComments } from "./lib/mdx-utils.mjs";
 import { extractDiagramBlocks, renderAll, replaceBlocks } from "./lib/diagram-renderer.mjs";
 import { lintXhtml } from "./lib/epub-lint.mjs";
 
@@ -92,7 +92,8 @@ const pendingTasks = [];
 for (const entry of mdxEntries) {
   const f = entry.file;
   const mdxPath = entry.mdxPath;
-  const raw = entry.raw;
+  // HTML 注释只服务于写作流程（track/verify/source/FIGURE），不得进入 XHTML
+  const raw = stripHtmlComments(entry.raw);
   const title = entry.title;
   const slug = entry.slug;
   const xhtmlName = f.replace(/\.mdx$/, ".xhtml");

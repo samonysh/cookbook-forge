@@ -6,6 +6,59 @@ export function normalizeNewlines(raw) {
 }
 
 /**
+ * 剥离正文中的 HTML 注释，供 LaTeX / Typst / EPUB 转换器使用。
+ * 保留代码围栏（``` / ~~~）内部原样，避免把示例里的注释当元数据删掉。
+ * 支持跨行 `<!-- ... -->`；删除后保留空行，维持原有行号结构。
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripHtmlComments(text) {
+  const lines = normalizeNewlines(text).split("\n");
+  const out = [];
+  let inFence = false;
+  let inComment = false;
+
+  for (const line of lines) {
+    if (!inComment && /^\s*(?:```|~~~)/.test(line)) {
+      inFence = !inFence;
+      out.push(line);
+      continue;
+    }
+    if (inFence) {
+      out.push(line);
+      continue;
+    }
+
+    let rest = line;
+    let kept = "";
+    while (rest.length > 0) {
+      if (inComment) {
+        const end = rest.indexOf("-->");
+        if (end === -1) {
+          rest = "";
+          break;
+        }
+        rest = rest.slice(end + 3);
+        inComment = false;
+      } else {
+        const start = rest.indexOf("<!--");
+        if (start === -1) {
+          kept += rest;
+          rest = "";
+          break;
+        }
+        kept += rest.slice(0, start);
+        rest = rest.slice(start + 4);
+        inComment = true;
+      }
+    }
+    out.push(kept);
+  }
+
+  return out.join("\n");
+}
+
+/**
  * 解析 MDX frontmatter。支持：
  *   key: value           简单键值
  *   key: "quoted value"  带引号（自动去引号）

@@ -41,6 +41,15 @@ const EXT_MAP = {
  *   - hash: 内容稳定 hash（前 10 位 hex）
  *   - caption: 代码块下方紧邻的 "> ..." 引用/标题文本（如果有），否则 fallback 到 "<lang> diagram"
  */
+function findPrecedingFigureId(mdxBody, fenceIndex) {
+  const lines = mdxBody.slice(0, fenceIndex).split("\n");
+  for (let i = lines.length - 1; i >= 0 && i >= lines.length - 6; i--) {
+    const m = lines[i].match(/<!--\s*FIGURE:\s*(fig-\d{2}-\d+)\b/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 export function extractDiagramBlocks(mdxBody) {
   const blocks = [];
   // 围栏代码块（支持 ``` 或 ~~~），语言标记 = mermaid / plantuml / puml
@@ -58,12 +67,14 @@ export function extractDiagramBlocks(mdxBody) {
     if (capMatch) {
       caption = (capMatch[1] || capMatch[2] || "").trim().replace(/^图\s*/, "");
     }
+    const blockIndex = m.index + (m[0].startsWith("\n") ? 1 : 0);
     blocks.push({
       lang,
       body,
-      index: m.index + (m[0].startsWith("\n") ? 1 : 0),
+      index: blockIndex,
       match: fullMatch,
       hash,
+      figureId: findPrecedingFigureId(mdxBody, blockIndex),
       caption: caption || `${lang} diagram`,
     });
   }
@@ -116,8 +127,9 @@ export async function renderAll(bookRoot, blocks, { onProgress } = {}) {
   for (const b of blocks) {
     const type = KROKI_TYPE_MAP[b.lang];
     const ext = EXT_MAP[b.lang] || b.lang;
-    const svgFileName = `diagram-${b.hash}.svg`;
-    const srcFileName = `diagram-${b.hash}.${ext}`;
+    // 有 FIGURE 注解时用稳定图号，便于 frontmatter/正文引用；否则沿用旧 hash 命名
+    const svgFileName = b.figureId ? `${b.figureId}.svg` : `diagram-${b.hash}.svg`;
+    const srcFileName = b.figureId ? `${b.figureId}.${ext}` : `diagram-${b.hash}.${ext}`;
     const svgAbsPath = path.join(figDir, svgFileName);
     const srcAbsPath = path.join(srcDir, srcFileName);
     const r = { ...b, svgFileName, svgAbsPath, srcAbsPath, rendered: false };

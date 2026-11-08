@@ -6,6 +6,19 @@
 
 你会收到一个完整的 MDX 章节文件内容（含 YAML frontmatter 和正文）。
 
+## 写作元注解处理（强制）
+
+源 MDX 中可能出现以下四类 HTML 注释，它们只服务于写作流程，**必须全部丢弃，不得出现在输出中**：
+
+- `<!-- track: app|principle|synthesis|meta -->`：轨道标记。
+- `<!-- verify: L1|L2|L3 -->`：代码块验证等级。
+- `<!-- source: <路径>#L<a>-<b> | 证明：<结论> -->`：源码证据块标注（不是可运行示例）。
+- `<!-- FIGURE: fig-NN-M | type | 内容 | 依据 ... -->`：图位标注。
+
+丢弃注释时，**保留 FIGURE 注解后面的真实图片引用与图题**。如果图片后紧跟一行以 `**图 N-M**` 开头的独立图题，且图片 alt 已包含同一编号，则该行是 MDX 阅读态图题，转换时跳过，避免与 `\caption` 重复。
+
+同时保留：代码块中的中文注释、公式后的中文说明、`N.10 本章参考` 小节（按普通正文小节转换）。
+
 ## 输出规则
 
 ### 1. 文件结构
@@ -125,14 +138,15 @@ Markdown 图片 `![alt](src)` 转为 figure 环境：
 ```latex
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.85\textwidth]{figures/<basename>}
-\caption{<alt 文本，去掉"图 N-M"前缀如果已经在 alt 中>}
+\includegraphics[width=0.85\textwidth]{figures/<basename>.pdf}
+\caption{<alt 文本，去掉「图 N-M」编号前缀>}
 \end{figure}
 ```
 
-只取 `src` 的文件名（basename），不保留路径前缀 `public/figures/`。图片路径固定为 `figures/xxx.svg`。
+只取 `src` 的文件名（basename），不保留路径前缀 `public/figures/`。图片路径固定为 `figures/xxx.pdf`：xelatex 不能直接嵌入 SVG，`lmdx2tex.mjs` 会在拷贝资源后把同名 `.svg` 转成 `.pdf`，因此这里写 `.pdf`。
 
-**重要**：如果图片 alt 文本以"图 N-M"开头（如"图 1-1：@log 装饰器调用时序"），caption 中保留该编号。
+**重要**：如果图片 alt 文本以"图 N-M"开头（如"图 1-1：@log 装饰器调用时序"），caption 只保留编号后的描述文本；编号由 LaTeX 图表计数器渲染，手写「图 N-M」会出现「图 1.1 图 1-1」双重编号。
+**新图位约定**：图文件名可能是 `fig-NN-M.svg`；取 basename，扩展名改写为 `.pdf`。图片 alt 已含编号时，跳过紧随其后的独立 `**图 N-M**` 图题行，避免双重 caption。
 
 ### 8. 行内格式
 

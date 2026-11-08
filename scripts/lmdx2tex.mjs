@@ -17,7 +17,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
-import { parseFrontmatter } from "./lib/mdx-utils.mjs";
+import { parseFrontmatter, stripHtmlComments } from "./lib/mdx-utils.mjs";
 import { extractDiagramBlocks, renderAll, replaceBlocks } from "./lib/diagram-renderer.mjs";
 import { lintText } from "./lib/latex-lint.mjs";
 
@@ -89,7 +89,8 @@ const pendingTasks = [];
 for (const entry of mdxEntries) {
   const f = entry.file;
   const mdxPath = entry.mdxPath;
-  const raw = entry.raw;
+  // HTML 注释只服务于写作流程（track/verify/source/FIGURE），不得进入 LaTeX
+  const raw = stripHtmlComments(entry.raw);
   const title = entry.title;
   const slug = entry.slug;
 
@@ -203,6 +204,33 @@ try {
   console.log(`  拷贝了 ${count} 个图片到 latex/figures/`);
 } catch {
   console.log("  未找到 public/figures 目录，跳过图片拷贝");
+}
+
+// xelatex 不能直接 \includegraphics{*.svg}：用 typst 把矢量图转成 PDF（保留矢量）。
+// 转换脚本写在 figures/ 内，使用相对路径，编译后删除临时 .typ。
+try {
+  const fns = (await fs.readdir(figDir)).filter((f) => /\.svg$/i.test(f));
+  let ok = 0;
+  for (const fn of fns) {
+    const stem = fn.replace(/\.svg$/i, "");
+    const tmpTyp = `_svg2pdf_${stem}.typ`;
+    await fs.writeFile(
+      path.join(figDir, tmpTyp),
+      `#set page(width: auto, height: auto, margin: 0pt)\n#image("${fn}")\n`,
+      "utf8"
+    );
+    try {
+      execSync(`typst compile "${tmpTyp}" "${stem}.pdf"`, { cwd: figDir, stdio: "ignore" });
+      ok++;
+    } catch {
+      // typst 缺失或单图失败：保留 SVG，后续编译会明确报错
+    } finally {
+      await fs.rm(path.join(figDir, tmpTyp), { force: true });
+    }
+  }
+  console.log(`  转换了 ${ok}/${fns.length} 个 SVG 为 PDF（供 xelatex include）`);
+} catch {
+  // 无 figures 目录则跳过
 }
 
 const diagSrc = path.join(mdxDir, "public", "diagrams-src");
