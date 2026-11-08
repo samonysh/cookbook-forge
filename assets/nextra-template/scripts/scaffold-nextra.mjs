@@ -4,7 +4,7 @@
 // 在 nextra-site/ 目录下把模板里的 {{XXX}} 占位符替换为真实值，并拷贝 MDX 章节。
 //
 // 用法：
-//   node scripts/scaffold-nextra.mjs --slug python-decorators --title "Python 装饰器 CookBook" [--github URL] [--year 2026] [--mdx ../mdx]
+//   node scripts/scaffold-nextra.mjs --slug my-book --title "My CookBook" [--github URL] [--year 2026] [--mdx ../mdx]
 //
 // 运行后还需：
 //   npm install && npm run build
