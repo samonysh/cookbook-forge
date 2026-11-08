@@ -21,9 +21,9 @@ test-output/
 *.zip
 
 # 书籍工程的本地产物（规范与脚本之外的中间态）
+# 只忽略渲染产物 figures/；diagrams-src/ 是手写图源，必须入库
 metadata/
 mdx/public/figures/
-mdx/public/diagrams-src/
 
 # IDE / 本地计划文档
 .trae/
