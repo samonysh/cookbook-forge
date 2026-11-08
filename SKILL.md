@@ -2,7 +2,7 @@
 name: "cookbook-forge"
 slug: "cookbook-forge"
 displayName: "Cookbook Forge"
-version: "1.5.0"
+version: "1.5.1"
 license: "MIT"
 summary: "从多源资料生成深度技术 CookBook / Handbook / Survey，产出 MDX -> ElegantBook PDF、Nextra 网站、优化 EPUB、Typst PDF。"
 description: "Generates deep technical CookBooks, Handbooks, and Surveys from user materials (websites, PDFs, EPUBs, GitHub repos, arxiv papers, docs). Produces MDX chapters first, then ElegantBook LaTeX/PDF, Nextra website, optimized EPUB, and Typst PDF. Invoke when user asks to write a Cookbook, handbook, survey, technical book, or structured long-form documentation for a project/domain."
@@ -167,6 +167,18 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 ```
 
 **目录与入库约定**：以上目录属于**书籍工程**，不属于本 Skill 仓库。本 Skill 仓库只收录 `scripts/`、`assets/`、`references/` 与文档；**PDF、EPUB 与 Typst/LaTeX/EPUB 构建目录（`latex/`、`typst/`、`epub/`、`mdx/`）一律不入库**。书籍工程需在自己的 `.gitignore` 里排除这些目录与 `*.pdf`、`*.epub`；需要发布时用 git tag + GitHub Release 附件分发二进制产物，不把二进制提交进仓库。
+
+**为什么是硬规则**：本仓库是公开分发单元。样书书名、模块包名、用户名与目录结构一旦进仓库或历史，就等于把用户材料公开；PDF/EPUB 体积大、无法增量评审，且会永久留在历史里。清理已提交的敏感内容只能重写历史 + force-push：所有下游 SHA 变化、协作者需重新克隆、还必须先做仓库外备份。所以这条规则的价值不在「事后清理」，而在**提交前拦住**。
+
+**提交前自查（三条全为 0 才允许 commit）**：
+
+```bash
+git grep -n -iE "<项目名>|<模块包名>|<框架名>|C:\\Users\\<用户名>" -- . ':!dist'
+git log -p --all | grep -iE "<项目名>|<模块包名>|<框架名>|C:\\Users\\<用户名>"   # 必须无输出
+git ls-files | grep -E "(^|/)(latex|typst|epub|mdx)/|\.(pdf|epub)$"              # 必须无输出
+```
+
+第一条查工作区，第二条查全部历史（最容易漏），第三条查被跟踪的产物。若第二条命中：先 `git bundle create <仓库外路径>/<repo>-backup-YYYYMMDD.bundle --all`，再用 `git filter-repo --replace-text <rules>` 做字面替换（提交信息与其他内容保持不变），校验 `git log -p --all` 0 命中、确认远端无他人新提交后，才 `git push --force-with-lease`；备份不推远端。
 
 ---
 
@@ -398,7 +410,7 @@ references:
 - 用 `word-count.mjs` 统计每章与全书 CJK，生成 `metadata/word-count.txt`；用 `ratio-count.mjs` 出双线报告。两者共用 `scripts/lib/word-caliber.mjs`，口径必须一致。
 - **字数口径（全仓唯一）**：只算正文，剔除围栏代码块、HTML 注释与 meta（章首 / `N.0` / `N.10`）；Markdown 表格按 1/2 计数（表内 CJK × 0.5），表格以外的成段文字按 1:1 计数。禁止另立口径。
 - **5 万字是全书正文（`body3`）的最低下限，不是目标值**：它只用于防止内容单薄。是否继续写由覆盖度决定；上限不设死线。超过同类参考区间时在大纲或 `04-dual-track.md` 写明「为什么这个内容量是必要的」。
-- **表格不能替代论述**：每个 H2 小节都必须有成段文字讲清因果、取舍与边界，表格只做对照与速查。`ratio-count.mjs` 的告警阈值为：**有表但成段论述 <120 字**，或**表格折算字数占该节正文 >60% 且成段论述 <300 字**。命中即 WARN，需补段落或人工确认，不允许靠加表格凑字数。
+- **表格不能替代论述**：每个 H2 小节都必须有成段文字讲清因果、取舍与边界，表格只做对照与速查。`ratio-count.mjs` 的告警阈值为：**有表但成段论述 <120 字**，或**表格折算字数占该节正文 >60% 且成段论述 <300 字**。命中即 WARN，需补段落或人工确认，不允许靠加表格凑字数。**补法**：在同一 H2 内补成段论述，写清该现象的成因、取舍、失败模式与判断顺序；不删表、不给表加行、不把表格单元格改写成句子。验收标准是「删掉表格后这一节仍能独立读懂」。若补论述使综合段占比超过 15%，先核对是否复述；不是复述就保留并在报告中说明比例变化，不得为压回区间删掉刚补的因果分析（见方法论 6.6.4）。
 - **双线比例是事后校准，不是写作约束**：运行 `node scripts/ratio-count.mjs --root=<book> --write`。脚本按 track 汇总各轨 CJK，输出实际比例、与大纲/`frontmatter.ratio` 目标的偏差（超 ±10pp 报 WARN），并把实测结果回填 frontmatter 的 `ratio`。写作时按内容完整性写，不必先算比例；比例失衡时回看是否某条线被代码或表格替代。
 - **字数口径固定三分，报告必须带标签**：`tApp`（应用线 + 原理线，双线合计）/ `body3`（tApp + 综合段，全书正文）/ `含 meta`（body3 + 章首等）。对外汇报禁止只写「全书正文」，并必须注明「表格按 1/2 计数」。
 - **应用线字数按正文 CJK 计**（代码块与 HTML 注释不计入）。用代码承载应用知识、正文只写两句，会让应用线系统性偏低；应用线必须靠正文把**任务、参数怎么选、边界、排错、最小验证**讲清楚，代码只负责可运行证据。发现应用线占比偏低时，补的是正文任务链与判断依据，不是再贴代码，也不是削薄原理线。
@@ -527,6 +539,7 @@ references:
 - [ ] 跨章引用都是可点击 markdown 链接
 - [ ] 全书 `body3` ≥5 万 CJK（只算正文：剔除代码块、HTML 注释、meta；表格按 1/2 计数）；总量与模块权重一致；超出同类参考区间已写明理由；汇报同时写明 tApp / body3 / 含 meta 三个数并注明表格口径，禁止只写「全书正文」
 - [ ] 三端产物不入库：Skill 仓库与书籍仓库均不含 `*.pdf`、`*.epub` 与 `latex/`、`typst/`、`epub/`、`mdx/` 构建目录；发布走 tag + Release 附件
+- [ ] 提交前制度自查：`git log -p --all` 对项目名/模块包名/框架名/用户名 0 命中；`git ls-files` 不含上述产物与构建目录；有命中则先做仓库外 bundle 备份，再重写历史
 - [ ] `metadata/sources.md` 记录所有参考资料
 - [ ] MDX 输出存在且 `_meta.ts` 章节顺序正确
 - [ ] 若输出 LaTeX/PDF：`latex-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；xelatex 两遍编译成功；封面检查通过（存在、1280×1024、非空白，见 `_cover_report.json`）；PDF 无 Markdown 残留
@@ -607,6 +620,8 @@ references:
 | 逐章 probe 报「封面文件缺失」 | probe 在 `_probe/` 下，`figures/cover.png` 相对路径失效 | `typst-check.mjs` 已自动镜像导言 figures 资源到 `_probe/figures/`；仍缺失时先查源文件 |
 | 两轮字数对不上 | 一轮报 tApp、另一轮报 body3，或表格口径不同，标签混用 | 三口径必须带标签（tApp / body3 / 含 meta），并统一用 `word-caliber.mjs`（表格 ×0.5） |
 | PDF/EPUB/build 目录被误提交 | 书籍工程未设 `.gitignore`，或把 Skill 仓库当书仓用 | `.gitignore` 排除 `latex/`、`typst/`、`epub/`、`mdx/`、`*.pdf`、`*.epub`；发布用 tag + Release 附件 |
+| 补论述后综合段占比 >15% | 把「诊断信号」当成配额，误删刚补的因果分析 | 先核对是否复述；非复述保留并在报告写明比例变化（方法论 6.6.4）；只能删与前文重复的句子 |
+| 历史里已提交样书项目名/模块路径 | 首次提交前没做历史级脱敏自查 | 公开仓库等于泄露用户材料；只能仓库外 bundle 备份 + `filter-repo --replace-text` 重写 + `--force-with-lease`，下游 SHA 全部变化 |
 
 ---
 
@@ -616,13 +631,13 @@ references:
 |---|---|---|
 | 章节 | 约 14 章 | 由 A0 判定 + A2 spine 决定，不是固定 15 章模板；此处只给量级，不列可反查目录 |
 | 双线合计 tApp | 67,024 CJK | 应用 36,695 : 原理 30,330 ≈ 55:45 |
-| 全书正文 body3 | 75,069 CJK | 综合段 8,045，占正文 10.7%；表格按 1/2 折算后仍 ≥5 万 |
+| 全书正文 body3 | 76,388 CJK | 综合段 9,364，占正文 12.3%；表格按 1/2 折算后仍 ≥5 万 |
 | meta | 7,963 CJK | 章首等，不计入正文与比例 |
 | 图 | 36 张正文图 + 1 张封面 | 每章 ≥2，产物、正文引用、图题齐全 |
 | 可运行代码块 | 80 个 | 全部带 L1/L2/L3 标记与 `metadata/verify/` 实测记录 |
 | 三链 | LaTeX / Typst / EPUB 各 14/14 通过 | 零编译错误，封面/目录/页码衔接正常 |
 
-> 这组数字是可复查的验收基线，不是「建议这样做」的口号。规则是否有效，用它们对照：图数、代码块数、三链通过率都能当场复算。样书只以「一本库框架类样书」指代，不写书名、作者、仓库路径或可反查的目录结构。
+> 这组数字是可复查的验收基线，不是「建议这样做」的口号。规则是否有效，用它们对照：图数、代码块数、三链通过率都能当场复算。样书只以「一本库框架类样书」指代，不写书名、作者、仓库路径或可反查的目录结构。本轮把 3 处「表格替代论述」小节补成段论述（+1,319 字），body3 由 75,069 → 76,388，综合段占比 10.7% → 12.3%；其中 3 章综合段落到 16.0%–22.6%，人工复核为因果/取舍/失败模式而非复述，按 6.6.4 保留并记录，没有为压比例删字。
 
 ---
 

@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.5.0"><img src="https://img.shields.io/badge/version-1.5.0-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.5.1"><img src="https://img.shields.io/badge/version-1.5.1-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -198,7 +198,7 @@ cookbook-forge/
 
 ### 书籍产物不入库
 
-本 Skill 仓库只收录 Skill 本体（`scripts/`、`assets/`、`references/` 与文档）。PDF、EPUB 与 Typst/LaTeX/EPUB 构建目录（`latex/`、`typst/`、`epub/`、`mdx/`）一律不入库；书籍工程需在自己的 `.gitignore` 中排除这些目录与 `*.pdf`、`*.epub`。需要发布时用 git tag + GitHub Release 附件分发二进制产物，不把二进制提交进仓库。
+本 Skill 仓库只收录 Skill 本体（`scripts/`、`assets/`、`references/` 与文档）。PDF、EPUB 与 Typst/LaTeX/EPUB 构建目录（`latex/`、`typst/`、`epub/`、`mdx/`）一律不入库；书籍工程需在自己的 `.gitignore` 中排除这些目录与 `*.pdf`、`*.epub`。需要发布时用 git tag + GitHub Release 附件分发二进制产物，不把二进制提交进仓库。提交前自查：`git log -p --all` 查项目名/模块包名/用户名应为 0 命中，`git ls-files` 不应含上述产物；命中时先在仓库外 `git bundle` 备份，再重写历史并 `--force-with-lease` 推送。
 
 ## 安装与发布
 
@@ -221,8 +221,8 @@ npx skills add samonysh/cookbook-forge
 打包发布：
 
 ```bash
-node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.5.0.zip
-skillhub publish ./cookbook-forge --changelog "v1.5.0: 字数口径改为正文/表格 1/2、双线比例降级为事后校准、新增表格替代论述告警、三端产物不入库"
+node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.5.1.zip
+skillhub publish ./cookbook-forge --changelog "v1.5.1: 补表格替代论述的补法与验收、补论述致综合段超阈值不回删、新增提交前脱敏/产物/历史自查"
 ```
 
 ## License

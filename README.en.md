@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.5.0"><img src="https://img.shields.io/badge/version-1.5.0-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.5.1"><img src="https://img.shields.io/badge/version-1.5.1-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -197,7 +197,7 @@ Before delivery:
 
 ### Book artifacts are not committed
 
-This Skill repository only contains the Skill itself (`scripts/`, `assets/`, `references/` and docs). PDF, EPUB, and Typst/LaTeX/EPUB build directories (`latex/`, `typst/`, `epub/`, `mdx/`) are never committed; each book project excludes them and `*.pdf` / `*.epub` in its own `.gitignore`. Publish binaries via git tags + GitHub Release assets.
+This Skill repository only contains the Skill itself (`scripts/`, `assets/`, `references/` and docs). PDF, EPUB, and Typst/LaTeX/EPUB build directories (`latex/`, `typst/`, `epub/`, `mdx/`) are never committed; each book project excludes them and `*.pdf` / `*.epub` in its own `.gitignore`. Publish binaries via git tags + GitHub Release assets. Before committing, run `git log -p --all` (project/module/user names must return 0 hits) and `git ls-files` (no artifacts). If history already contains them, back up with `git bundle` outside the repo, then rewrite history and push with `--force-with-lease`.
 
 ## Publishing to SkillHub
 
