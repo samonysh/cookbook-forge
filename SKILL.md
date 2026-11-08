@@ -2,7 +2,7 @@
 name: "cookbook-forge"
 slug: "cookbook-forge"
 displayName: "Cookbook Forge"
-version: "1.5.1"
+version: "1.5.2"
 license: "MIT"
 summary: "从多源资料生成深度技术 CookBook / Handbook / Survey，产出 MDX -> ElegantBook PDF、Nextra 网站、优化 EPUB、Typst PDF。"
 description: "Generates deep technical CookBooks, Handbooks, and Surveys from user materials (websites, PDFs, EPUBs, GitHub repos, arxiv papers, docs). Produces MDX chapters first, then ElegantBook LaTeX/PDF, Nextra website, optimized EPUB, and Typst PDF. Invoke when user asks to write a Cookbook, handbook, survey, technical book, or structured long-form documentation for a project/domain."
@@ -289,6 +289,8 @@ references:
 | `N.4–N.7` | 原理线：机制、控制流、数据结构、边界条件 | `principle` |
 | `N.8–N.9` | 综合段：双向映射、选型与陷阱、要点总结 | `synthesis` |
 | `N.10` | 本章参考 | `meta` |
+
+**轨道归属看内容性质，不看写作顺序**：机制、对象结构、判断顺序、成本来源写进原理线（`principle`）；双向映射（操作/现象 → 机制 → 所以 → 不这样会怎样）、深度判断与误区写进综合段（`synthesis`）。同一段里混着两类内容就按句拆开归位，不要整段硬塞；补论述修「表格替代论述」时尤其容易把机制解释记在 `synthesis` 账上，导致综合段虚高、原理线偏低。自查方法：逐句问「这句在解释为什么/内部怎么走/成本从哪来吗」，是就归原理线；只保留「现象对应哪个机制、所以该怎么做、不这样会怎样」的判断链在综合段。
 
 每章必须有：章节引入、本章地图、正文、代码（带中文注释）、图表、常见陷阱、要点总结、`N.10 本章参考`。
 
