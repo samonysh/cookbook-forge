@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.3.0"><img src="https://img.shields.io/badge/version-1.3.0-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.4.0"><img src="https://img.shields.io/badge/version-1.4.0-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -42,8 +42,11 @@ It consolidates the core capabilities of three pre-existing Skills:
 - 🔍 **Paper search**: supports `paper-search` (MCP) to search 20+ sources (arXiv, PubMed, Semantic Scholar, etc.)
 - 🏛️ Architecture-first: produces a full map and chapter outline, aligns with the user, then writes chapter-by-chapter
 - 📝 MDX as the canonical intermediate format: one `.mdx` per chapter for easy conversion to any downstream format
-- 🎨 Rich figures: mermaid / plantuml / drawio / excalidraw / chart, chosen based on user preference
-- 📖 Four output formats (combinable):
+- ⚙️ **Two conversion paths**: LLM chapter-by-chapter conversion (three prompts) and deterministic `mdx2book.mjs`; the latter parses block by block, keeps prose verbatim, and uses explicit figure numbering `fig-NN-M` for structurally simple chapters
+- 🧾 **Auditable writing process**: four kinds of HTML annotations (`track` / `verify` / `source` / `FIGURE`) stay in MDX and are stripped uniformly at conversion time; `chapter-lint.mjs` validates the N.0–N.10 skeleton, figure slots, verification levels, and per-block run records
+- 📊 **Measured dual-track ratio**: `ratio-count.mjs` counts body CJK characters per `track` (code blocks and HTML comments excluded), writes back to frontmatter, and emits a report
+- 🎨 Rich figures: HTML sources (exported to SVG via `assets/diagram-style/`) / mermaid / plantuml / drawio / excalidraw / chart, chosen based on user preference
+- 📖 **MDX + four final formats** (combinable):
   - **MDX** (default): chapterized Markdown + JSX, the source format
   - **ElegantBook LaTeX + PDF**: built on [ElegantLaTeX/ElegantBook](https://github.com/ElegantLaTeX/ElegantBook), compiled with xelatex
   - **Nextra v3 website**: built on [Nextra](https://nextra.site), with dark mode, full-text search, i18n, KaTeX, one-click Vercel/Docker deploy
@@ -70,16 +73,22 @@ cookbook-forge/
 ├── scripts/
 │   ├── lib/
 │   │   ├── diagram-renderer.mjs          # Unified diagram rendering pipeline (mermaid/plantuml -> Kroki SVG)
-│   │   ├── mdx-utils.mjs                 # MDX frontmatter parser
+│   │   ├── mdx-utils.mjs                 # MDX frontmatter parser + HTML comment stripping
 │   │   ├── latex-lint.mjs                # LaTeX lint/fix rules
 │   │   ├── epub-lint.mjs                 # EPUB XHTML lint/fix + XML well-formedness rules
-│   │   └── typst-lint.mjs                # Typst lint/fix rules
+│   │   ├── typst-lint.mjs                # Typst lint/fix rules
+│   │   └── typst-optimize.mjs            # Deterministic Typst optimization (label injection, ref rewriting)
 │   ├── lmdx2tex.mjs                      # LLM-driven MDX -> ElegantBook LaTeX converter
 │   ├── latex-check.mjs                   # LaTeX lint + rule fixes + per-chapter parallel probe compiles
 │   ├── lmdx2typst.mjs                    # LLM-driven MDX -> Typst (ilm template) converter
 │   ├── typst-check.mjs                   # Typst lint + rule fixes + per-chapter parallel probe compiles
+│   ├── typst-fonts-check.mjs             # Typst font availability precheck
 │   ├── lbuild-epub.mjs                   # LLM-driven MDX -> EPUB3 converter
 │   ├── epub-check.mjs                    # EPUB lint + per-chapter XML well-formedness + package checks
+│   ├── mdx2book.mjs                      # Deterministic MDX -> Typst/LaTeX/EPUB chapters (explicit figure numbers)
+│   ├── chapter-lint.mjs                  # Chapter structure lint (N.0–N.10, markers, figures, run records)
+│   ├── ratio-count.mjs                   # Dual-track ratio (CJK per track, code blocks/comments excluded)
+│   ├── render-figures.mjs                # Figure source -> SVG export and slot validation
 │   ├── render-diagrams.mjs               # Diagram renderer (mermaid/plantuml -> SVG)
 │   ├── word-count.mjs                    # Word count
 │   ├── epub-zip.mjs                      # EPUB-compliant packager
@@ -90,6 +99,7 @@ cookbook-forge/
 ├── references/
 │   ├── style-guide-oreilly.md            # O'Reilly CookBook style reference
 │   ├── style-guide-springer.md           # Springer Handbook style reference
+│   ├── technical-book-analysis-methodology.md # Pre-writing analysis methodology (define / decompose / map / deepen / weave)
 │   ├── stage-5a-mdx.md                   # Stage 5a: MDX output sub-process
 │   ├── stage-5b-latex.md                 # Stage 5b: LaTeX + PDF sub-process
 │   ├── stage-5c-nextra.md                # Stage 5c: Nextra site sub-process
@@ -102,9 +112,11 @@ cookbook-forge/
     │   └── mdx-to-typst.md               # MDX->Typst conversion prompt
     ├── template-mdx/
     │   └── chapter-template.mdx          # Per-chapter MDX template
+    ├── diagram-style/                    # Vendored diagram-design style (HTML -> SVG)
     ├── nextra-template/                  # Nextra site scaffold
     ├── elegantbook-main.template.tex.txt # ElegantBook LaTeX template
     ├── ilm-template.typ.txt              # Typst ilm template (optimized styles)
+    ├── ilm-callout.typ.txt               # Standalone four-color callout module
     ├── stylesheet.template.css           # EPUB base CSS
     └── stylesheet.formula-image.css      # CSS for formula-as-image EPUBs
 ```
@@ -168,6 +180,9 @@ Before delivery:
 - [ ] One MDX per chapter with complete frontmatter; includes intro / map / key points / see-also
 - [ ] All code blocks have language tags and Chinese comments
 - [ ] All figures have number, caption, in-text reference, and explanatory paragraph
+- [ ] Chapter skeleton: `chapter-lint.mjs --strict` exits 0 (N.0–N.10, four annotation types, figures match frontmatter, per-block run records)
+- [ ] Dual-track ratio: `ratio-count.mjs --write` report exists and `ratio` is written back to frontmatter
+- [ ] Four HTML annotation types (track / verify / source / FIGURE) do not leak into `.tex` / `.typ` / XHTML
 - [ ] Cross-chapter references are clickable links
 - [ ] Word target met, or gap explicitly documented
 - [ ] PDF: `latex-check.mjs --fix --compile` exits 0; xelatex builds clean; cover 1280×1024 non-empty; no Markdown residue

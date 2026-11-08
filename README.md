@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.3.0"><img src="https://img.shields.io/badge/version-1.3.0-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.4.0"><img src="https://img.shields.io/badge/version-1.4.0-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -42,8 +42,11 @@
 - 🔍 **论文搜索**：支持 `paper-search`（MCP）从 arXiv、PubMed、Semantic Scholar 等 20+ 来源搜索论文
 - 🏛️ **架构先行**：先生成整体全景图与章节大纲，与用户对齐后再逐章写作
 - 📝 **MDX 为权威中间格式**：每章一个 `.mdx`，便于后续多格式转换
-- 🎨 **丰富图表**：mermaid / plantuml / drawio / excalidraw / chart，按用户偏好选用
-- 📖 **四种最终输出格式**（可组合）：
+- ⚙️ **双转换路径**：LLM 逐章转换（三个 Prompt）与 `mdx2book.mjs` 确定性转换并存；后者按块解析、正文逐字保留，图表使用显式编号 `fig-NN-M`，适合结构固定的章节
+- 🧾 **写作过程可审计**：四类 HTML 注解（`track` / `verify` / `source` / `FIGURE`）在 MDX 内保留、转换时统一剥离；`chapter-lint.mjs` 校验 N.0–N.10 骨架、图位、验证等级与逐块实测记录
+- 📊 **双线比例实测**：`ratio-count.mjs` 按 `track` 统计正文 CJK 字数（剔除代码块与 HTML 注释），回填 frontmatter 并输出报告
+- 🎨 **丰富图表**：HTML 图源（`assets/diagram-style/` 导出 SVG）/ mermaid / plantuml / drawio / excalidraw / chart，按用户偏好选用
+- 📖 **MDX + 四种最终格式**（可组合）：
   - **MDX**（默认）：章节化 Markdown + JSX，适合作为源格式
   - **ElegantBook LaTeX + PDF**：基于 [ElegantLaTeX/ElegantBook](https://github.com/ElegantLaTeX/ElegantBook)，xelatex 编译
   - **Nextra v3 网站**：基于 [Nextra](https://nextra.site)，支持明暗模式、全文搜索、i18n、KaTeX、一键 Vercel/Docker 部署
@@ -70,16 +73,22 @@ cookbook-forge/
 ├── scripts/
 │   ├── lib/
 │   │   ├── diagram-renderer.mjs          # 统一图表渲染 pipeline（mermaid/plantuml -> Kroki SVG）
-│   │   ├── mdx-utils.mjs                 # MDX frontmatter 解析工具
+│   │   ├── mdx-utils.mjs                 # MDX frontmatter 解析与 HTML 注释剥离
 │   │   ├── latex-lint.mjs                # LaTeX lint/fix 规则库
 │   │   ├── epub-lint.mjs                 # EPUB XHTML lint/fix + XML 良构校验规则库
-│   │   └── typst-lint.mjs                # Typst lint/fix 规则库
+│   │   ├── typst-lint.mjs                # Typst lint/fix 规则库
+│   │   └── typst-optimize.mjs            # Typst 确定性优化（label 注入、引用改写等）
 │   ├── lmdx2tex.mjs                      # LLM 驱动 MDX -> ElegantBook LaTeX 转换
 │   ├── latex-check.mjs                   # LaTeX 静态 lint + 规则修复 + 每章并行 probe 编译
 │   ├── lmdx2typst.mjs                    # LLM 驱动 MDX -> Typst（ilm 模板）转换
 │   ├── typst-check.mjs                   # Typst 静态 lint + 规则修复 + 每章并行 probe 编译
+│   ├── typst-fonts-check.mjs             # Typst 字体可用性预检
 │   ├── lbuild-epub.mjs                   # LLM 驱动 MDX -> EPUB3 转换
 │   ├── epub-check.mjs                    # EPUB 静态 lint + 每章 XML 良构校验 + 包结构检查
+│   ├── mdx2book.mjs                      # 确定性 MDX -> Typst/LaTeX/EPUB 章节转换（显式图号）
+│   ├── chapter-lint.mjs                  # 章节结构 lint（N.0–N.10、标记、图位、实测记录）
+│   ├── ratio-count.mjs                   # 双线比例统计（按 track 计 CJK，剔除代码块与注释）
+│   ├── render-figures.mjs                # 图源 -> SVG 导出与图位校验
 │   ├── render-diagrams.mjs               # 图表渲染（mermaid/plantuml -> SVG）
 │   ├── word-count.mjs                    # 字数统计
 │   ├── epub-zip.mjs                      # EPUB 合规打包
@@ -90,6 +99,7 @@ cookbook-forge/
 ├── references/
 │   ├── style-guide-oreilly.md            # O'Reilly CookBook 写作风格参考
 │   ├── style-guide-springer.md           # Springer Handbook 写作风格参考
+│   ├── technical-book-analysis-methodology.md # 前置分析方法论（定·拆·图·深·织）
 │   ├── stage-5a-mdx.md                   # 阶段 5a：MDX 输出子流程
 │   ├── stage-5b-latex.md                 # 阶段 5b：LaTeX + PDF 子流程
 │   ├── stage-5c-nextra.md                # 阶段 5c：Nextra 网站子流程
@@ -102,6 +112,7 @@ cookbook-forge/
     │   └── mdx-to-typst.md               # MDX->Typst 转换 Prompt
     ├── template-mdx/
     │   └── chapter-template.mdx          # 单章 MDX 写作模板
+    ├── diagram-style/                    # vendored diagram-design 出图样式（HTML -> SVG）
     ├── nextra-template/                  # Nextra 站点骨架
     ├── elegantbook-main.template.tex.txt # ElegantBook LaTeX 模板
     ├── ilm-template.typ.txt              # Typst ilm 模板（优化样式）
@@ -169,6 +180,9 @@ cookbook-forge/
 - [ ] 每章一个 MDX，frontmatter 完整，含引入/地图/要点/延伸阅读
 - [ ] 代码块全部带语言标识 + 中文注释
 - [ ] 图表有编号、标题、正文引用、说明段落
+- [ ] 章节骨架：`chapter-lint.mjs --strict` 退出码 0（N.0–N.10、四类注解、图位与 frontmatter 一致、逐块实测记录）
+- [ ] 双线比例：`ratio-count.mjs --write` 报告存在，`ratio` 已回填 frontmatter
+- [ ] 四类 HTML 注解（track / verify / source / FIGURE）未泄漏到 `.tex` / `.typ` / XHTML
 - [ ] 跨章引用为可点击链接
 - [ ] 字数达标或明确说明缺口
 - [ ] PDF：`latex-check.mjs --fix --compile` 退出码 0；xelatex 编译通过；封面 1280×1024 非空；无 Markdown 残留
@@ -183,7 +197,7 @@ cookbook-forge/
 ### 通过 skills.sh 安装
 
 ```bash
-npx skills samonysh/cookbook-forge
+npx skills add samonysh/cookbook-forge
 ```
 
 ### 通过 SkillHub 发布
@@ -199,8 +213,8 @@ npx skills samonysh/cookbook-forge
 打包发布：
 
 ```bash
-node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.3.0.zip
-skillhub publish ./cookbook-forge --changelog "v1.3.0: 新增 Typst 输出、图表双格式、阶段5分拆、质量检查"
+node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.4.0.zip
+skillhub publish ./cookbook-forge --changelog "v1.4.0: 新增确定性转换器、章节结构 lint、双线比例统计、图表渲染管线与前置分析方法论"
 ```
 
 ## License

@@ -2,7 +2,7 @@
 name: "cookbook-forge"
 slug: "cookbook-forge"
 displayName: "Cookbook Forge"
-version: "1.3.0"
+version: "1.4.0"
 license: "MIT"
 summary: "从多源资料生成深度技术 CookBook / Handbook / Survey，产出 MDX -> ElegantBook PDF、Nextra 网站、优化 EPUB、Typst PDF。"
 description: "Generates deep technical CookBooks, Handbooks, and Surveys from user materials (websites, PDFs, EPUBs, GitHub repos, arxiv papers, docs). Produces MDX chapters first, then ElegantBook LaTeX/PDF, Nextra website, optimized EPUB, and Typst PDF. Invoke when user asks to write a Cookbook, handbook, survey, technical book, or structured long-form documentation for a project/domain."
@@ -94,6 +94,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `references/stage-5c-nextra.md` - 阶段 5c：Nextra v3 网站子流程（按需读取）。
 - `references/stage-5d-epub.md` - 阶段 5d：EPUB 子流程（按需读取）。
 - `references/stage-5e-typst.md` - 阶段 5e：Typst（ilm 模板）子流程（按需读取）。
+- `references/technical-book-analysis-methodology.md` - 前置分析方法论「定·拆·图·深·织」：对象判定、多切面拆解、全局地图、概念→原理递归、双线编排与每步 DoD（阶段 2–3 按需读取）。
 
 ---
 

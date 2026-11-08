@@ -1,9 +1,15 @@
 {
   "name": "cookbook-forge",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
-  "description": "Domain CookBook / Handbook / Survey generator (Skill)",
+  "description": "Domain CookBook / Handbook / Survey generator (Skill): MDX -> ElegantBook LaTeX/PDF, Nextra site, EPUB, Typst PDF",
+  "scripts": {
+    "mdx2book": "node scripts/mdx2book.mjs",
+    "render-figures": "node scripts/render-figures.mjs",
+    "chapter-lint": "node scripts/chapter-lint.mjs",
+    "ratio-count": "node scripts/ratio-count.mjs"
+  },
   "dependencies": {
     "jszip": "^3.10.1"
   }
