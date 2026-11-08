@@ -345,6 +345,7 @@ out.push("# 双线比例实测报告");
 out.push("");
 out.push(`生成时间: ${new Date().toISOString()}`);
 out.push(`统计口径: 仅正文 CJK 字符，已剔除代码块与 HTML 注释；meta（章首）不参与比例`);
+out.push(`三分口径: tApp = 应用线 + 原理线；body3 = tApp + 综合段（全书正文）；含 meta = body3 + 章首等`);
 out.push(`目标来源: ${targets.source.length ? targets.source.join(" + ") : "未找到目标文件"}`);
 out.push(`偏差阈值: ${THRESHOLD}pp；综合段区间: ${SYNTH_MIN}%–${SYNTH_MAX}%`);
 out.push("");
@@ -374,17 +375,20 @@ for (const r of results) {
 }
 
 const tApp = total.app + total.principle;
+const tBody = tApp + total.synthesis;
+const tAll = tBody + total.meta;
 out.push("");
-out.push("## 全书");
+out.push("## 全书（三分口径，引用时必须带标签）");
 out.push("");
 if (tApp > 0) {
-  out.push(`- 应用线 ${total.app} 字 / 原理线 ${total.principle} 字 → 实测比例 **${((total.app / tApp) * 100).toFixed(1)} : ${((total.principle / tApp) * 100).toFixed(1)}**`);
+  out.push(`- **双线合计 tApp**（应用线 + 原理线）：${tApp} 字 → ${total.app} : ${total.principle} = **${((total.app / tApp) * 100).toFixed(1)} : ${((total.principle / tApp) * 100).toFixed(1)}**`);
 }
-const tBody = tApp + total.synthesis;
 if (tBody > 0) {
-  out.push(`- 综合段 ${total.synthesis} 字，占正文 ${((total.synthesis / tBody) * 100).toFixed(1)}%`);
+  out.push(`- **全书正文 body3**（tApp + 综合段）：${tBody} 字；综合段 ${total.synthesis} 字，占正文 ${((total.synthesis / tBody) * 100).toFixed(1)}%`);
 }
-out.push(`- meta（章首等）${total.meta} 字，不参与比例`);
+out.push(`- **全书含 meta**（body3 + 章首等）：${tAll} 字；meta ${total.meta} 字，不参与比例`);
+out.push("");
+out.push("> 对外汇报必须同时写明三个口径的名字（tApp / body3 / 含 meta）。只写「全书正文」会让跨轮次数字不可比：本轮 71,272 是 tApp，72,644 与 80,576 是 body3。");
 out.push("");
 
 const allIssues = results.flatMap((r) => r.issues.map((i) => ({ ...i, chapter: r.chapter })));

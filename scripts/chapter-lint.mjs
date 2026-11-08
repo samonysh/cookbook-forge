@@ -216,6 +216,15 @@ for (const f of files) {
     add(label, "ERROR", "V3", "frontmatter `figures` 存在重复项");
   }
 
+  // ---- V5 图号顺序与正文出现顺序一致（插图/挪图后最易漏改）----
+  const figNums = bodyIds.map((id) => Number(id.split("-")[2]));
+  for (let i = 1; i < figNums.length; i++) {
+    if (Number.isFinite(figNums[i]) && Number.isFinite(figNums[i - 1]) && figNums[i] < figNums[i - 1]) {
+      add(label, "WARN", "V5", `图号顺序与正文出现顺序不一致（${bodyIds[i - 1]} → ${bodyIds[i]}），插图后需重编号`);
+      break;
+    }
+  }
+
   // ---- V4 实测记录 ----
   const rec = await readVerifyRecord(label);
   if (!rec.exists) {
@@ -283,6 +292,14 @@ for (const f of files) {
   // ---- N1 本章参考小节 ----
   if (!/^##\s+.*本章参考/m.test(body)) {
     add(label, "WARN", "N1", "缺少章末「本章参考」小节（N.10）");
+  }
+
+  // ---- N2 占位章号 ----
+  // 骨架模板里的 N.x / 第 N 章 是占位符，定稿后必须换成真实章号；
+  // 漏改会一路带进 LaTeX/Typst/EPUB 的标题与目录。只查标题行，避免误伤正文里的版本号。
+  const ph = body.match(/^#{1,6}\s+N\.\d+|第\s*N\s*章/m);
+  if (ph) {
+    add(label, "ERROR", "N2", `标题残留占位章号「${ph[0].trim()}」，定稿前必须替换为真实章号`);
   }
 
   summary.push({
