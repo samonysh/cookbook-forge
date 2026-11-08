@@ -63,11 +63,11 @@ LLM 转换 vs 脚本转换的优势：
 - `mimetype` 第一个条目且 STORED（不压缩）
 - 其他文件 DEFLATE 压缩
 
-**封面**：`lbuild-epub.mjs` 会识别 `figures/cover.(png|jpe?g)`，自动生成 `cover.xhtml`
+**封面（机制不变）**：`lbuild-epub.mjs` 会识别 `figures/cover.(png|jpe?g)`，自动生成 `cover.xhtml`
 作为 spine 首项，并在 `content.opf` 中登记 `properties="cover-image"` 与
-`<meta name="cover" content="cover-image"/>`。封面规格 1280×1024，来源规则同 LaTeX/Typst
-（无素材时画全书架构图）。样式上使用 `fit contain`（`max-width:100%; max-height:100vh`），
-保证不裁切、不压字。
+`<meta name="cover" content="cover-image"/>`。EPUB 的封面机制与 LaTeX/Typst 的封面落位改造无关，
+保持现状；封面规格 1280×1024，来源规则同 LaTeX/Typst（无素材时画全书架构图）。样式上使用
+`fit contain`（`max-width:100%; max-height:100vh`），保证不裁切、不压字。
 
 ### 7. 并行质量检查（check ⇄ fix，≤3 轮）
 

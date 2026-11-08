@@ -93,7 +93,11 @@
 \clubpenalty=10000
 
 \begin{document}
-__COVER_PAGE__
+% 封面图走 ElegantBook 原生 \cover 图位：\cover{...} 设置的图由 \maketitle
+% 画在封面页的图片区（等比缩放），与书名/副标题同页，封面保持单页。
+% 不要在 \maketitle 前另插 \includegraphics 整页：那会多出一页，且 \cover 未设置时
+% \maketitle 会退回 example-image 占位图。
+__COVER_IMAGE__
 \maketitle
 \tableofcontents
 

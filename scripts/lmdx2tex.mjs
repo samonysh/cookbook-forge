@@ -257,18 +257,13 @@ let mainTemplate = await fs.readFile(mainTemplatePath, "utf8");
 
 const inputs = chapterRefs.map(c => `\\input{chapters/${c.slug}}`).join("\n");
 
-// 封面：figures/cover.png 存在时插入整页图，否则保留纯文字书名页。
+// 封面：figures/cover.* 存在时交给 ElegantBook 的原生 \cover 图位（与书名同页），
+// 不另起整页图片；无图时留空，交给模板默认行为。
 const coverFile = ["cover.png", "cover.jpg", "cover.jpeg"]
   .map((name) => path.join(figDir, name))
   .find((p) => existsSync(p));
-const coverPage = coverFile
-  ? [
-      "\\thispagestyle{empty}",
-      "\\begin{center}",
-      `\\includegraphics[width=\\textwidth,height=\\textheight,keepaspectratio]{figures/${path.basename(coverFile)}}`,
-      "\\end{center}",
-      "\\newpage",
-    ].join("\n")
+const coverImage = coverFile
+  ? `\\cover{figures/${path.basename(coverFile)}}`
   : "";
 
 mainTemplate = mainTemplate
@@ -277,7 +272,7 @@ mainTemplate = mainTemplate
   .replace(/__BOOK_AUTHOR__/g, BOOK_AUTHOR)
   .replace(/__BOOK_INSTITUTE__/g, BOOK_INSTITUTE)
   .replace(/__BOOK_VERSION__/g, BOOK_VERSION)
-  .replace("__COVER_PAGE__", coverPage)
+  .replace("__COVER_IMAGE__", coverImage)
   .replace("__CHAPTER_INPUTS__", inputs);
 
 await fs.writeFile(path.resolve("latex/main.tex"), mainTemplate, "utf8");

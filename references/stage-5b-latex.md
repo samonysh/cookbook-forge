@@ -76,11 +76,22 @@ ElegantBook 文档类依赖 `elegantbook.cls`，需要先准备好 cls 文件：
 - [ ] 全书 ≥5 万 CJK（不含 meta），章长与模块权重一致
 - [ ] LaTeX 可复现编译（零 error）
 
-### 7.1 封面（自动插入 + 闸门）
+### 7.1 封面（ElegantBook 原生图位 + 闸门）
 
-`lmdx2tex.mjs` 组装 `main.tex` 时会在 `\begin{document}` 后插入整页封面：
-`figures/cover.png`（或 `.jpg/.jpeg`）存在时替换模板占位符 `__COVER_PAGE__`，
-生成 `\includegraphics[width=\textwidth,height=\textheight,keepaspectratio]` + `\newpage`。
+`lmdx2tex.mjs` 组装 `main.tex` 时，`figures/cover.png`（或 `.jpg/.jpeg`）存在则替换模板占位符 `__COVER_IMAGE__`，只输出一行：
+
+```latex
+\cover{figures/cover.png}
+```
+
+`\cover` 是 ElegantBook 的原生封面图位：`\maketitle` 在封面页顶部按
+`\includegraphics[width=\linewidth]{\@cover}` 画图，等比缩放、不拉伸，随后接
+书名/副标题/作者块，**封面始终单页**。不要再用「`\includegraphics` 整页 + `\newpage`」：
+那会多出一页，且 `\cover` 未设置时 `\maketitle` 会退回 `example-image` 占位图。
+
+1280×1024 图按 A4 满版宽 210mm 缩放为 168mm 高，加 0.5in 色条与标题块后仍余约 39mm，
+不越界、不裁切、不挤字；竖图或异比例图由下面的尺寸闸门拦截。
+
 封面规格固定为 **1280×1024 PNG**；没有现成素材时，用 diagram-design 默认样式画一张
 说明全书架构的图（spine、模块分群、主要依赖方向），图源放 `mdx/public/diagrams-src/cover.html`，
 产物放 `figures/cover.svg` 与 `figures/cover.png`。

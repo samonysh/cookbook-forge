@@ -16,6 +16,9 @@
 //         --config <path>（配置解析顺序：--config > typst/.typst-project.json 内嵌配置
 //                          > ./typst.config.json > assets/typst-default.config.json）
 //
+// probe 编译前会把导言中引用的 figures/ 资源镜像到 _probe/figures/（如封面
+// #image("figures/cover.png")），避免相对路径解析到 _probe/ 后被误报成「封面缺失」。
+//
 // --fix 的三个 pass（全部幂等）：
 //   1. 数学块固化规则（typst-lint.mjs fixText，只动数学块）；
 //   2. 确定性优化器（typst-optimize.mjs）：标题手动编号剥离（P0-1）、figure label 注入
@@ -242,9 +245,36 @@ function collectAllLabels(text) {
 
 // ---------- 每章 probe 并行编译 ----------
 
+const PREAMBLE_FIGURE_RE = /["']((?:\.\.\/)*figures\/[^"']+\.(?:png|jpe?g|svg|webp|gif))["']/gi;
+
+/**
+ * probe 文件位于 _probe/，导言里的 figures/xxx 会相对 probe 目录解析。
+ * 把导言引用到的图片镜像到 _probe/figures/，否则封面等主模板资源会被判成缺文件。
+ */
+async function mirrorPreambleFigures(preamble, probeDir) {
+  const seen = new Set();
+  let count = 0;
+  for (const m of preamble.matchAll(PREAMBLE_FIGURE_RE)) {
+    const rel = m[1];
+    if (seen.has(rel)) continue;
+    seen.add(rel);
+    const src = path.resolve(PROJECT, rel);
+    if (!existsSync(src)) continue;
+    const dest = path.join(probeDir, rel);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.copyFile(src, dest);
+    count++;
+  }
+  return count;
+}
+
 async function compileCheck(typst, chaptersDir, preamble, targets, labelSets) {
   const probeDir = path.join(PROJECT, "_probe");
   await fs.mkdir(probeDir, { recursive: true });
+  const mirrored = await mirrorPreambleFigures(preamble, probeDir);
+  if (mirrored > 0) {
+    console.log(`  [probe ] 已镜像 ${mirrored} 个导言图片到 _probe/figures/`);
+  }
   const results = new Map();
 
   const queue = [...targets];

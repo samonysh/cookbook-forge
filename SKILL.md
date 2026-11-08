@@ -338,7 +338,10 @@ references:
 - 默认需要封面；优先使用用户提供的图片，统一转成 1280×1024 PNG。
 - **没有合适素材时不要留空、不要用纯色占位**：用 diagram-design 默认样式画一张说明全书架构的图——必须体现 spine（读者旅程/主线）、模块分群（章组）与主要依赖方向；标题用书名，副标题用一句话定位。
 - 尺寸固定 1280×1024；图源 `mdx/public/diagrams-src/cover.html`，产物 `mdx/public/figures/cover.svg` + `cover.png`。沿用「diagrams-src 入库、figures 为派生物」的规则。
-- 转换器会把 `figures/cover.png` 自动插入 LaTeX / Typst / EPUB 首页（contain 方式，不裁切）；`latex-check.mjs` 强制校验存在、尺寸与非空白。
+- **LaTeX**：走 ElegantBook 原生 `\cover{figures/cover.png}` 图位——架构图画在 `\maketitle` 的封面图片区，与书名/副标题同页，封面**必须是单页**；禁止在 `\maketitle` 前另插 `\includegraphics` 整页（会多出一页，并让 `\maketitle` 退回 `example-image` 占位图）。
+- **Typst**：架构图放在**封面后一页**，走 ilm 的 `preface:` 参数（渲染顺序：封面 → 架构图 → 目录 → 正文）。不选「封面页内联」：那要自定义 `cover-page` 并重写标题/作者/日期排版，跨 ilm 版本易碎且容易压字；`preface:` 是模板一等参数，位置稳定。注意 `#show: ilm.with(...)` 之后再插 `#page(...)` 会落到目录之后，不能这样做。
+- **EPUB**：`cover.xhtml` 作为 spine 首项，`content.opf` 登记 `cover-image`，机制保持不变。
+- 三端统一**等比缩放留白**：LaTeX 用 `\includegraphics[width=\linewidth]`（只给宽度，graphicx 保持纵横比），Typst 用 `fit: "contain"`，禁止拉伸变形；`latex-check.mjs` 强制校验存在、尺寸与非空白。
 
 #### 表格规范
 

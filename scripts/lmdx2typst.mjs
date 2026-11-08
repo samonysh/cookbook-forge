@@ -349,18 +349,19 @@ await fs.writeFile(path.join(typstDir, "callout.typ"), calloutTemplate, "utf8");
 
 const includes = chapterRefs.map(c => `#include "chapters/${c.slug}.typ"`).join("\n");
 
-// 封面：figures/cover.png 存在时插入整页图（contain，避免裁切），否则不生成封面页。
+// 封面：figures/cover.* 存在时放进「封面后一页」，走 ilm 的 preface 参数
+// （渲染顺序：封面 → preface → 目录 → 正文）。不选「封面页内联」：那需要自定义
+// cover-page 并重写标题/作者/日期排版，跨 ilm 版本易碎且容易压字。
 const coverFile = ["cover.png", "cover.jpg", "cover.jpeg"]
   .map((name) => path.join(figDir, name))
   .find((p) => existsSync(p));
-const coverPage = coverFile
+const coverPreface = coverFile
   ? [
-      `#page(margin: 0pt, header: none, footer: none, fill: white)[`,
-      `  #image("figures/${path.basename(coverFile)}", width: 100%, height: 100%, fit: "contain")`,
-      `]`,
-      `#pagebreak()`,
+      "[",
+      `  #align(center + horizon, image("figures/${path.basename(coverFile)}", width: 100%, fit: "contain"))`,
+      "]",
     ].join("\n")
-  : "";
+  : "none";
 
 mainTemplate = mainTemplate
   .replace(/__BOOK_TITLE__/g, BOOK_TITLE)
@@ -372,7 +373,7 @@ mainTemplate = mainTemplate
   .replace(/__FONT_CODE_SIZE__/g, FONT_CODE_SIZE)
   .replace(/__HEADING_NUMBERING__/g, () => genHeadingNumbering(TCFG))
   .replace(/__FIGURE_NUMBERING__/g, () => genFigureNumbering(TCFG))
-  .replace("__COVER_PAGE__", coverPage)
+  .replace("__COVER_PREFACE__", () => coverPreface)
   .replace("__CHAPTER_INCLUDES__", includes);
 
 await fs.writeFile(path.join(typstDir, "main.typ"), mainTemplate, "utf8");

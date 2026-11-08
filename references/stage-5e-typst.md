@@ -79,19 +79,28 @@ node scripts/lmdx2typst.mjs --title "书名" --author "作者"
 
 脚本此时会对全部已转换章节做**快速静态 lint**（零依赖、秒级），并在 `.conversion-plan.json` 的 `lintIssues` 字段输出问题清单。
 
-**封面**：`lmdx2typst.mjs` 组装 `main.typ` 时会替换模板占位符 `__COVER_PAGE__`，
-`typst/figures/cover.png`（或 `.jpg/.jpeg`）存在时插入整页封面：
+**封面**：`lmdx2typst.mjs` 检测到 `typst/figures/cover.png`（或 `.jpg/.jpeg`）时，把架构图放进
+**封面后一页**，走 ilm 的一等参数 `preface:`（渲染顺序：封面 → preface → 目录 → 正文）：
 
 ```typ
-#page(margin: 0pt, header: none, footer: none, fill: white)[
-  #image("figures/cover.png", width: 100%, height: 100%, fit: "contain")
-]
-#pagebreak()
+#show: ilm.with(
+  // ...
+  preface: [
+    #align(center + horizon, image("figures/cover.png", width: 100%, fit: "contain"))
+  ],
+)
 ```
 
-`fit: "contain"` 保证 1280×1024 封面按比例完整显示、不裁切、不压字。封面来源与规格规则
-同 LaTeX：优先现成素材；没有时用 diagram-design 画全书架构图（spine、模块分群、依赖方向），
-图源进 `mdx/public/diagrams-src/cover.html`，产物进 `figures/`。
+选「封面后一页」而不选「封面页内联」的原因：ilm 的封面页由 `cover-page` 参数生成，若要在封面内
+放架构图，只能自定义 `cover-page:` 内容并重写标题/作者/日期排版，跨 ilm 版本易碎且容易压字；
+`preface:` 是模板白名单参数，稳定落在封面之后、目录之前，不动封面排版。
+
+只给 `width: 100%` + `fit: "contain"`，等比缩放、不裁切、不拉伸；封面页与 preface 页都在
+页脚规则设置之前，不显示页码，也不改变正文页码起点。封面来源与规格规则同 LaTeX：优先现成素材；
+没有时用 diagram-design 画全书架构图（spine、模块分群、依赖方向），图源进
+`mdx/public/diagrams-src/cover.html`，产物进 `figures/`。
+
+> 注意：`#show: ilm.with(...)` 之后再插 `#page(...)` 会落到**目录之后**，不能这样放架构图。
 
 ### 4. 检查与修复循环（check ⇄ fix，≤ 3 轮）-- 借鉴 pdf-to-typst-notes
 
