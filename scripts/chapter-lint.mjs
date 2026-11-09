@@ -27,7 +27,7 @@
  *   G2 章末两节是否回收了 N.0 的问题（共享实词 <2 即断链）
  *   G3 首个正文节是否原理线；是否连续 ≥3 个原理节
  *   G4 全章原理节是否 0 代码/图/表/源码证据锚
- *   G5 单个 H2 下 H3 是否 ≥8（一节弧过长）
+ *   G5 单个 H2 下 H3 是否 ≥8（提示项：提示复核单弧，不强制拆节，阈值不收紧）
  *
  * 可读性误报控制：
  *   - 只检查正文段落，跳过代码、表格、列表、引用、callout、公式、图题
@@ -640,7 +640,7 @@ function checkOrganization(lines, label, add) {
   for (const s of h2) {
     const subs = sections.filter((x) => x.level === 3 && x.parent === s).length;
     if (subs >= 8 && !s.ignore.has("G5")) {
-      add(label, "WARN", "G5", `小节「${s.title}」含 ${subs} 个子小节，一节的弧太长，拆节或补综合段`);
+      add(label, "WARN", "G5", `小节「${s.title}」含 ${subs} 个子小节，提示复核是否装了两个问题（提示而非限制，阈值固定 8）`);
     }
   }
 }

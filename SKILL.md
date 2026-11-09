@@ -2,7 +2,7 @@
 name: "cookbook-forge"
 slug: "cookbook-forge"
 displayName: "Cookbook Forge"
-version: "1.8.0"
+version: "1.9.0"
 license: "MIT"
 summary: "从多源资料生成深度技术 CookBook / Handbook / Survey，产出 MDX -> ElegantBook PDF、Nextra 网站、优化 EPUB、Typst PDF。"
 description: "Generates deep technical CookBooks, Handbooks, and Surveys from user materials (websites, PDFs, EPUBs, GitHub repos, arxiv papers, docs). Produces MDX chapters first, then ElegantBook LaTeX/PDF, Nextra website, optimized EPUB, and Typst PDF. Invoke when user asks to write a Cookbook, handbook, survey, technical book, or structured long-form documentation for a project/domain."
@@ -252,10 +252,13 @@ git ls-files | grep -E "(^|/)(latex|typst|epub|mdx)/|\.(pdf|epub)$"             
 每章在大纲中写明：
 
 - 章节目标（读者读完能做什么）
+- 内容类型（Diátaxis：教程 / 操作指南 / 参考 / 解释）——只记录在 `metadata/outline.md`，用于识别查阅型章节与避免教程步骤混进参考表；不进入章节正文，不影响双线 `track` 统计
 - 在全书中的位置（与哪些章相互引用）
 - 预估字数
 - 必含图表/表格/代码块数
 - 依赖的来源资料
+
+查阅型章节（以「查参数 / 查结论」为主，而非「跟着想一遍」）允许在大纲中标注采用 LD/LDR 等 OCAR 变体。结构变体只换叙述顺序：`track` 注解照常打、双线比例仍按 `body3` 口径统计、综合段仍守 10%–15%、`G1`/`G2` 仍适用；比例异常如实报告，不为凑数改内容。
 
 **必须用 AskUserQuestion 把 outline.md 发给用户确认后再进入写作阶段。**
 
@@ -308,7 +311,7 @@ references:
 6. **正文不点材料 + 章末参考**：正文不得出现「你提供的文档有偏差」「原文写法有误」这类针对材料来源的表述，也不得引用材料瑕疵展开。每章末尾独立开 `N.10 本章参考`，简短列出本章参考的内容、提供了什么、与本章的关系；不并入 `N.9`。
 7. **源码证据单独标注**：原理线允许、也鼓励摘录关键源代码作为机制证据，用来解释对象结构、调度顺序和不变量；但只摘关键片段，并说明它证明了什么，不整段贴。源码摘录用 `<!-- source: <路径>#L<a>-L<b> | 证明：<结论> -->` + 紧随的代码围栏标注；它不是可运行示例，**不写 `verify: Lx`，也不进入 `metadata/verify/chNN.txt`**，不能冒充验证等级。应用线不得依赖源码摘录，只能引用公开 API 与可观测输出（`result.output`、`usage`、消息序列、异常类型等）。`chapter-lint` 会把带 `source` 标记的块排除在 V1/C1/V4 之外单独计数。
 8. **可读性（W1–W6）**：章首先写读者此刻的具体困境与不解决的代价，第四句才引入核心概念；每个 H2/H3 第一段先交代「什么时候会遇到、不处理会怎样」，再给定义（H3 首段 <60 字视为过渡句，豁免此项）；术语与缩写（MCP、HITL、OTel）首次出现必须带一句白话解释或全称括注（`就是 / 即 / 指的是 / 可以理解为`）；段落首句是 ≤70 字的主题句，不以「因此/所以/但是/此外」直接开头；单句 ≤120 CJK（>180 为 ERROR），≥5 个逗号且 ≥100 字必须拆；禁止「本节将介绍」「众所周知」「随着……发展」这类空转开场。完整规则、正反例与文献依据见 `references/readability-style-guide.md`；阶段 6 由 `chapter-lint.mjs` 的 W1–W6 复核，误报用 `<!-- lint-ignore: Wx -->` 标注理由；`--strict` 下 W2 升为 ERROR，其余 W 项保持 WARN。
-9. **组织层（O1–O9 / G1–G5）**：一章必须是一条完整的问题链，不是分类目录。`N.0` 用一句可回答的问题立题（不写「本章介绍 X」），并写明本章不解决什么；每个 H2 首句承接上一节（回指结论 / 点出缺口 / 复用术语），末句移交或关闭问题；第一个正文节必须是应用线，每个原理节首段回指应用线里出现过的具体现象；一个 H2 只回答一个问题，H3 ≤6；原理/综合节能指出判断、理由、证据、限定、回应；全章核心术语 ≤5 个、一种叫法、章末复现；`N.8–N.9` 必须回到 `N.0` 的问题并写「原来以为 X，现在知道 Y」，最后两节不首次引入新术语或未解释的缩写。完整规则、正反例、材料对照与冲突清单见 `references/narrative-structure-guide.md`；阶段 6 由 `chapter-lint.mjs` 的 G1–G5 复核（G1 章首无问题句、G2 章末未回收、G3 机制先行/连堆、G4 原理线无证据锚、G5 单节 H3 ≥8），误报用 `<!-- lint-ignore: Gx -->` 标注理由；`G` 系列恒为 WARN，`--no-organization` 可整体关闭。
+9. **组织层（O1–O9 / G1–G5）**：一章必须是一条完整的问题链，不是分类目录。`N.0` 用一句可回答的问题立题（不写「本章介绍 X」），并写明本章不解决什么；每个 H2 首句承接上一节（回指结论 / 点出缺口 / 复用术语），末句移交或关闭问题；第一个正文节必须是应用线，每个原理节首段回指应用线里出现过的具体现象；一个 H2 只回答一个问题，H3 ≤6；原理/综合节能指出判断、理由、证据、限定、回应；全章核心术语 ≤5 个、一种叫法、章末复现；`N.8–N.9` 必须回到 `N.0` 的问题并写「原来以为 X，现在知道 Y」。**章末钩子是硬规则**：最后两节不首次引入术语（加粗概念、新缩写、新标签），预告下一章只能回指本章已定义、已给过例子的概念，且不写下一章技术细节。查阅型章节允许 LD/LDR 等结构变体，但 `track`、`body3` 比例、综合段 10%–15%、G1/G2 照旧，比例异常如实报告。完整规则、正反例、材料对照与冲突裁定见 `references/narrative-structure-guide.md`；阶段 6 由 `chapter-lint.mjs` 的 G1–G5 复核（G1 章首无问题句、G2 章末未回收、G3 机制先行/连堆、G4 原理线无证据锚、G5 单节 H3 ≥8），误报用 `<!-- lint-ignore: Gx -->` 标注理由；`G` 系列恒为 WARN，其中 `G5` 为提示而非限制（阈值固定 8，不收紧到 7），`--no-organization` 可整体关闭。
 
 #### 图表规范
 
