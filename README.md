@@ -43,6 +43,7 @@
 - 🏛️ **架构先行**：先生成整体全景图与章节大纲，与用户对齐后再逐章写作
 - 📝 **MDX 为权威中间格式**：每章一个 `.mdx`，便于后续多格式转换
 - ⚙️ **双转换路径**：LLM 逐章转换（三个 Prompt）与 `mdx2book.mjs` 确定性转换并存；后者按块解析、正文逐字保留，图表使用显式编号 `fig-NN-M`，适合结构固定的章节
+- 🚀 **统一构建入口**：`build-book.mjs` 一条命令产出 EPUB 与两版 PDF，自动按书名命名；书名解析与文件名清洗收敛在 `lib/book-meta.mjs`，脚本不再各自硬编码 `book.epub` / `main.pdf`
 - 🧾 **写作过程可审计**：四类 HTML 注解（`track` / `verify` / `source` / `FIGURE`）在 MDX 内保留、转换时统一剥离；`chapter-lint.mjs` 校验 N.0–N.10 骨架、图位、验证等级与逐块实测记录
 - 📊 **双线比例实测**：`ratio-count.mjs` 按 `track` 统计正文 CJK（剔除代码块、HTML 注释与 meta；表格内 CJK 按 1/2 计数），`--write` 回填 frontmatter 并输出报告；对「有表但成段论述 <120 字」或「表格折算占比 >60% 且成段论述 <300 字」的小节报 WARN；综合段按 10%–15% 判定，含章末回收段的章节上限放宽到 18%（下限 10% 不变）
 - 📐 **篇幅按覆盖度定**：A0/A1 后按模块数 × 递归深度 × 概念密度定全书总量；下限 5 万 CJK（`body3` 口径：不含 meta，表格按 1/2 计数），不设逐章固定预算，章长按模块权重分配
@@ -52,7 +53,7 @@
   - **MDX**（默认）：章节化 Markdown + JSX，适合作为源格式
   - **ElegantBook LaTeX + PDF**：基于 [ElegantLaTeX/ElegantBook](https://github.com/ElegantLaTeX/ElegantBook)，xelatex 编译
   - **Nextra v3 网站**：基于 [Nextra](https://nextra.site)，支持明暗模式、全文搜索、i18n、KaTeX、一键 Vercel/Docker 部署
-  - **优化 EPUB**：LXGW WenKai 子集化嵌入、booktabs 表格、tcolorbox 风格代码块、兼容老旧阅读器
+  - **优化 EPUB**：标题 h1–h4 按 1.9/1.5/1.22/1.08em 分级（相对单位、`inherit` 配色，深浅色与阅读器反色均可读）、LXGW WenKai 子集化嵌入、booktabs 表格、tcolorbox 风格代码块、按书名输出
   - **Typst PDF**：基于 [ilm](https://typst.app/universe/package/ilm) 模板，LXGW WenKai 中文字体、四色 callout 提示框、booktabs 表格、代码块圆角边框
 - 🌏 **中英文 README 自动生成**（书籍项目自带）
 
@@ -81,6 +82,7 @@ cookbook-forge/
 │   │   ├── typst-lint.mjs                # Typst lint/fix 规则库
 │   │   ├── typst-optimize.mjs            # Typst 确定性优化（label 注入、引用改写等）
 │   │   ├── word-caliber.mjs              # 正文口径（CJK / 表格 ×0.5 / meta 剔除），word-count 与 ratio-count 共用
+│   │   ├── book-meta.mjs                 # 书名解析 + 跨平台文件名清洗（--title > outline.md > main.tex > 兜底）
 │   │   └── cli-args.mjs                  # CLI 参数约定（--root 只认等号写法）
 │   ├── lmdx2tex.mjs                      # LLM 驱动 MDX -> ElegantBook LaTeX 转换
 │   ├── latex-check.mjs                   # LaTeX 静态 lint + 规则修复 + 每章并行 probe 编译
@@ -204,6 +206,49 @@ cookbook-forge/
 ### 书籍产物不入库
 
 本 Skill 仓库只收录 Skill 本体（`scripts/`、`assets/`、`references/` 与文档）。PDF、EPUB 与 Typst/LaTeX/EPUB 构建目录（`latex/`、`typst/`、`epub/`、`mdx/`）一律不入库；书籍工程需在自己的 `.gitignore` 中排除这些目录与 `*.pdf`、`*.epub`。需要发布时用 git tag + GitHub Release 附件分发二进制产物，不把二进制提交进仓库。提交前自查：`git log -p --all` 查项目名/模块包名/用户名应为 0 命中，`git ls-files` 不应含上述产物；命中时先在仓库外 `git bundle` 备份，再重写历史并 `--force-with-lease` 推送。
+
+## 统一构建与产物命名
+
+章节转换、工程检查、最终构建分三层，互不越界：
+
+| 层 | 脚本 | 职责 |
+|---|---|---|
+| 章节转换 | `mdx2book.mjs`（确定性）/ `lmdx2tex.mjs`、`lmdx2typst.mjs`、`lbuild-epub.mjs`（LLM 驱动） | 逐章转 `.tex` / `.typ` / `.xhtml`，组装主文件 |
+| 工程检查 | `latex-check.mjs` / `typst-check.mjs` / `epub-check.mjs` | lint、规则修复、逐章 probe 编译 / XML 良构 / 包结构 |
+| 统一构建 | `build-book.mjs` + `lib/book-meta.mjs` | 解析书名、编译、按书名重命名 |
+
+在书籍工程根目录运行：
+
+```bash
+# 三种产物一起构建
+node <skill>/scripts/build-book.mjs --format=all
+
+# 只构建 LaTeX PDF；--root 只认等号写法
+node <skill>/scripts/build-book.mjs --format=latex --root=D:\books\MyBook
+
+# 显式覆盖书名
+node <skill>/scripts/build-book.mjs --format=epub --title "书名：副标题"
+```
+
+产物固定落在 `epub/<书名>.epub`、`latex/<书名>.pdf`、`typst/<书名>.pdf`。
+
+**书名从哪来**：`--title` → `metadata/outline.md` 的一级标题（如 `# 《书名：副标题》大纲`）→ `latex/main.tex` 的 `\title{}` / `\subtitle{}` → 兜底 `CookBook`。文件名只取主标题（第一个冒号前），副标题只进封面与元数据。
+
+**清洗规则**：NFKC 归一化、去 `《》`、`<>:"/\|?*` 与路径分隔符转 `-`、空白折叠、去首尾点/横线、Windows 保留名加 `_`、截断 120 字符。`book-meta.mjs` 是唯一实现，`lbuild-epub.mjs` / `lmdx2tex.mjs` / `lmdx2typst.mjs` / `epub-check.mjs` / `build-book.mjs` 全部复用它。
+
+**为什么先编 `main.pdf` 再改名**：部分 TeX 发行版与 shell 对非 ASCII jobname 的编码处理不一致，直接 `-jobname "<中文名>"` 可能产出乱码文件名或失败；`typst compile` 的同一问题同理。先编译固定名再 `fs.rename`，跨平台稳定；`build-book.mjs` 成功后清理 `main.pdf` / `book.pdf`，`lbuild-epub.mjs` 清理旧 `book.epub`。
+
+## EPUB 排版规范
+
+样式源是 `assets/stylesheet.template.css`，改这一处即可影响所有新书，不要手改某本书的产物。
+
+- **字号层级**：h1 1.9em / h2 1.5em / h3 1.22em / h4 1.08em，正文 1em；h5 1em、h6 0.95em。全部用 `em` 相对单位。
+- **字重**：h1/h2 700、h3/h4 600、正文 400。
+- **行高**：h1 1.3 / h2 1.35 / h3 1.4 / h4 1.45，正文 1.8。
+- **间距**：h2 `2em 0 0.7em`、h3 `1.6em 0 0.55em`、h4 `1.3em 0 0.4em`；正文段 `0.55em 0`。标题上留白 > 下留白 > 段间距。
+- **配色**：文字 `color: inherit`、背景 `transparent`，边框/分隔线/代码底用 `rgba(127,127,127,α)`，表格顶底与 th 下边线用 `currentColor`。不写死黑/白，不写 `@media (prefers-color-scheme: dark)`，深浅色与阅读器强制反色都能读。
+- **次级节奏**：代码块 0.9em、表格 0.95em、图题/表题 0.9em（`opacity: 0.82`），都小于正文 1em，又高于脚注级小字。
+- **分页**：标题 `page-break-after: avoid`；figure / 表格 / 代码块 / callout `page-break-inside: avoid`。
 
 ## 安装与发布
 

@@ -69,7 +69,8 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `scripts/word-count.mjs` - 字数统计（与 `ratio-count.mjs` 共用 `scripts/lib/word-caliber.mjs`：只算正文 CJK，剔除代码块/HTML 注释/meta，表格按 1/2 计数）。
 - `scripts/lbuild-epub.mjs` - **LLM 驱动**的 MDX -> EPUB3 转换器。通过子 agent 逐章节调用 LLM 智能转换为 XHTML，然后组装为 EPUB。组装后自动对已转换章节做静态 lint + XML 良构校验，并生成 `_TODO_EPUB_FIX.md` 修复任务清单。产物按书名输出 `<书名>.epub`（书名取自 `metadata/outline.md` 或 `--title`）。
 - `scripts/epub-check.mjs` - EPUB 工程质量检查 CLI：静态 lint + 每章 XML 良构校验（纯 JS 零依赖，`_lint_report.json`）+ 安全规则自动修复（`--fix`）+ 包结构检查（manifest/spine/nav/mimetype，`_check_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/epub-lint.mjs`。产物定位复用 `scripts/lib/book-meta.mjs`，不硬编码文件名。
-- `scripts/build-book.mjs` - 统一构建入口：`node scripts/build-book.mjs --format=all|epub|latex|typst [--root=<book>]`。按书名解析结果把 EPUB 与两版 PDF 输出为 `<书名>.epub` / `<书名>.pdf`；LaTeX/Typst 先编译成 `main.pdf` 再重命名，规避非 ASCII jobname 的兼容问题。书名解析与文件名清洗见 `scripts/lib/book-meta.mjs`。
+- `scripts/build-book.mjs` - 统一构建入口：`node scripts/build-book.mjs --format=all|epub|latex|typst [--root=<book>] [--title "书名"]`。按书名解析结果把 EPUB 与两版 PDF 输出为 `epub/<书名>.epub`、`latex/<书名>.pdf`、`typst/<书名>.pdf`；LaTeX/Typst 先编译成 `main.pdf` 再重命名，规避非 ASCII jobname 的兼容问题；成功后会清掉 `main.pdf` / 旧 `book.pdf` 等中间名。
+- `scripts/lib/book-meta.mjs` - 书名解析与产物命名的唯一实现：`resolveBookMeta({root, cliTitle, cliSubtitle})` 按「`--title` → `metadata/outline.md` 一级标题 → `latex/main.tex` 的 `\title{}`/`\subtitle{}` → 兜底 `CookBook`」解析，`splitTitle()` 拆主/副标题，`sanitizeFileBase()` 做跨平台安全清洗（NFKC、去 `《》`、`<>:"/\|?*` 转 `-`、空白折叠、Windows 保留名加 `_`、截断 120 字符）。`lbuild-epub.mjs` / `lmdx2tex.mjs` / `lmdx2typst.mjs` / `epub-check.mjs` / `build-book.mjs` 全部复用它，禁止各自硬编码 `book.epub` / `main.pdf` 之类的通用产物名。
 - `scripts/typst-fonts-check.mjs` - P1-4 字体可用性预检：运行 `typst fonts` 与配置 `fonts` 栈比对，报告缺失字体（编译前预检一次即可避免中文豆腐块）。
 - `scripts/kroki-render.mjs` - PlantUML 通过 Kroki.io 远程渲染（deflate+base64url 编码 GET，含隐私提示）。
 - `scripts/render-figures.mjs` - 图位与图源对齐：扫描 `<!-- FIGURE: fig-NN-M ... -->`，优先调用 `assets/diagram-style/export_svg.py` 把 `mdx/public/diagrams-src/<id>.html` 导出为 `mdx/public/figures/<id>.svg`，校验正文引用与每章 ≥2 图，报告写 `metadata/figure-report.txt`。
@@ -99,6 +100,16 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `references/readability-style-guide.md` - 可读性写作规范：概念先行、术语锚点、段落主题句、长句断句、中文名词化等 12 条规则，附正反例、文献依据与 W1–W7 lint 判定阈值（阶段 3 写作与阶段 6 复核必读）。
 - `references/narrative-structure-guide.md` - 组织层写作规范：章弧 OCAR、节间问题链、现象先于机制的漏斗、单节单弧、论证五件套、术语主线等 9 条规则（O1–O9），附四份写作材料的逐条对照、与既有规则的冲突清单、样书改写示范、G1–G6 lint 判定阈值与 14 章实测校准（阶段 2 提纲与阶段 3 写作必读）。
 
+**转换与构建的三层分工（避免重复造轮子）**：
+
+| 层 | 脚本 | 职责 | 不做什么 |
+|---|---|---|---|
+| 章节转换 | `mdx2book.mjs`（确定性）/ `lmdx2tex.mjs`、`lmdx2typst.mjs`、`lbuild-epub.mjs`（LLM 驱动） | 把 `mdx/*.mdx` 逐章转成 `.tex` / `.typ` / `.xhtml`，并组装主文件与工程目录 | 不负责最终产物命名，不负责整书编译 |
+| 工程检查 | `latex-check.mjs` / `typst-check.mjs` / `epub-check.mjs` | lint、规则修复、逐章 probe 编译或 XML 良构校验、包结构检查 | 不生成交付文件 |
+| 统一构建 | `build-book.mjs` + `lib/book-meta.mjs` | 解析书名、调用 `lbuild-epub.mjs` 或执行两遍 xelatex / `typst compile`、把 `main.pdf` 重命名为 `<书名>.pdf` | 不转换章节内容 |
+
+`build-book.mjs` 是唯一交付入口：EPUB 走 `lbuild-epub.mjs`（其内部已按书名输出），LaTeX/Typst 走「先编 `main.pdf` 再改名」。之所以不直接 `xelatex -jobname "<中文名>"` / `typst compile main.typ "<中文名>.pdf"`，是因为部分 TeX 发行版与 shell 对非 ASCII jobname 的编码处理不一致，容易产出乱码文件名或直接失败；先编译固定名再 `fs.rename` 跨平台稳定。`sanitizeFileBase()` 保证书名里的 `:`、`/`、`\`、`?`、`*` 等在不同文件系统上都不会变成路径或通配符。
+
 ---
 
 ## 总体目标
@@ -111,7 +122,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 4. **内容深入**：兼顾原理与实用，包含背景引入、章节地图、正文、代码（带注释）、图表、表格、Recipe、陷阱、要点总结、参考文献。
 5. **图表丰富**：条件触发 + 每章硬下限 2 张图。一个 H2 涉及 ≥3 个对象且存在先后/分层/分支/状态迁移时**必须**配图；禁止为凑数画装饰图。图源默认 diagram-design 的 HTML→SVG，mermaid/plantuml 围栏保留兼容。
 6. **篇幅按覆盖度定，不设逐章预算**：A0/A1 之后先定全书总量目标（模块数 × 递归深度 × 概念密度）；CJK 正文下限 5 万字（`body3` 口径：不含 meta，剔除代码块与 HTML 注释，表格按 1/2 计数），这是底线不是目标；上限不设死线，以「每个模块是否讲透」判断。章长按模块权重分配（重章可 8 千，边缘章可 3 千），不平均分。**表格不能替代论述**：每节仍要有成段文字把因果与取舍讲出来。详见方法论文档 6.6。
-7. **多格式输出**：默认 MDX；按用户指定输出 `mdx/`、`latex-pdf/`、`nextra-site/`、`epub/`、`typst/` 子文件夹。
+7. **多格式输出**：默认 MDX；按用户指定输出 `mdx/`、`latex/`、`nextra-site/`、`epub/`、`typst/` 子文件夹。
 
 ---
 
@@ -131,15 +142,14 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 │   └── public/
 │       ├── figures/                  # 图片 / 渲染后的图表
 │       └── diagrams-src/             # plantuml/.drawio/mermaid 源
-├── latex-pdf/                        # 当用户要求 PDF 时生成
-│   ├── latex/
-│   │   ├── main.tex
-│   │   ├── elegantbook.cls
-│   │   ├── chapters/
-│   │   ├── figures/
-│   │   ├── diagrams/
-│   │   └── metadata/
-│   └── dist/<BookSlug>.pdf
+├── latex/                            # 当用户要求 PDF 时生成
+│   ├── main.tex
+│   ├── elegantbook.cls
+│   ├── chapters/
+│   ├── figures/
+│   ├── diagrams/
+│   ├── metadata/
+│   └── <书名>.pdf                    # build-book.mjs --format=latex 产物（编译中间名 main.pdf 会被清掉）
 ├── nextra-site/                      # 当用户要求网站时生成
 │   ├── package.json
 │   ├── next.config.mjs
@@ -152,7 +162,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 │   ├── Dockerfile.txt                # 重命名为 Dockerfile 后可直接 docker compose up
 │   └── docker-compose.yml
 ├── epub/                             # 当用户要求 EPUB 时生成
-│   ├── <BookSlug>.epub
+│   ├── <书名>.epub                   # lbuild-epub.mjs / build-book.mjs --format=epub 产物
 │   └── build/                        # 解包/构建中间目录（交付前可清理）
 ├── typst/                            # 当用户要求 Typst 时生成
 │   ├── main.typ                      # ilm 模板主文件
@@ -161,13 +171,16 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 │   │   ├── ch00-overview.typ
 │   │   ├── ch01-xxx.typ
 │   │   └── ...
-│   └── figures/                      # 图片（SVG/PNG）
+│   ├── figures/                      # 图片（SVG/PNG）
+│   └── <书名>.pdf                    # build-book.mjs --format=typst 产物（编译中间名 main.pdf 会被清掉）
 └── metadata/
     ├── sources.md                    # 所有参考资料来源
     ├── image-sources.md
     ├── word-count.txt
     └── outline.md                    # 最终章节大纲（与用户对齐版）
 ```
+
+**产物命名规则**：`<书名>` 由 `scripts/lib/book-meta.mjs` 统一解析，优先级为 `--title` → `metadata/outline.md` 的一级标题（支持 `# 《书名：副标题》大纲`）→ `latex/main.tex` 的 `\title{}`/`\subtitle{}` → 兜底 `CookBook`。文件名只取主标题（第一个 `：`/`:` 之前），经 NFKC 归一化、去掉 `《》`、把 `<>:"/\|?*` 与路径分隔符替换为 `-`、空白折叠为单个 `-`、去掉首尾点/横线、Windows 保留名加 `_`、截断 120 字符。副标题仍保留在封面与元数据里，只是不进文件名。目录树写 `<书名>.pdf` / `<书名>.epub` 是通配表达，实际文件名是清洗后的书名主干。
 
 **目录与入库约定**：以上目录属于**书籍工程**，不属于本 Skill 仓库。本 Skill 仓库只收录 `scripts/`、`assets/`、`references/` 与文档；**PDF、EPUB 与 Typst/LaTeX/EPUB 构建目录（`latex/`、`typst/`、`epub/`、`mdx/`）一律不入库**。书籍工程需在自己的 `.gitignore` 里排除这些目录与 `*.pdf`、`*.epub`；需要发布时用 git tag + GitHub Release 附件分发二进制产物，不把二进制提交进仓库。
 
@@ -459,7 +472,7 @@ references:
 详见 `references/stage-5b-latex.md`。
 
 调用 `elegantbook-latex` skill，使用 **LLM 逐章节转换**流程：
-1. 初始化 `latex-pdf/latex/` 工程目录。
+1. 初始化 `latex/` 工程目录。
 2. 对每个 MDX 文件，使用 Task 工具启动子 agent，读取 `assets/prompts/mdx-to-latex.md` 转换规则，输出 `.tex` 章节文件。
 3. 使用 `scripts/lmdx2tex.mjs` 组装 main.tex。
 4. 检查与修复循环（check ⇄ fix，≤3 轮）：`node scripts/latex-check.mjs --project latex --fix --compile`——静态 lint + 安全规则自动修复（`**x**`->`\textbf{x}`、链接转 `\href`）+ 每章独立 probe 并行 xelatex 编译（N 章错误一次全部暴露，`_check_report.json`）；规则修不掉的按章交给子 agent 对照 MDX 原文修，复查 `--compile --only <slug>`。
@@ -483,7 +496,14 @@ references:
 从 `mdx/` 生成 EPUB，使用 **LLM 逐章节转换**流程：
 1. 对每个 MDX 文件，使用 Task 工具启动子 agent，读取 `assets/prompts/mdx-to-epub.md` 转换规则，输出 XHTML 章节文件。
 2. 使用 `scripts/lbuild-epub.mjs` 组装 EPUB3 结构。
-3. CSS 样式：标题 h1/h2/h3/h4 按 1.9/1.5/1.22/1.08em 分级（相对单位），正文 1em、行高 1.8；文字与背景用 `inherit`/`transparent` + 中性半透明灰边框，深浅色与阅读器反色均可读。
+3. CSS 样式（`assets/stylesheet.template.css`，数值固定，改这里而不是改某本书的产物）：
+   - **字号与层级**：h1 1.9em / h2 1.5em / h3 1.22em / h4 1.08em，正文 1em；h5 1em、h6 0.95em。全部用 `em` 相对单位，读者放大字号时层级不塌。
+   - **字重**：h1/h2 `700`，h3/h4 `600`，正文 `400`；h5/h6 `700`。
+   - **行高**：h1 `1.3`、h2 `1.35`、h3 `1.4`、h4 `1.45`，正文 `1.8`——标题越大越紧凑。
+   - **间距**：h1 `0 0 1em`（另加 `padding-bottom: 0.4em` + 2px 中性下边框）、h2 `2em 0 0.7em`、h3 `1.6em 0 0.55em`、h4 `1.3em 0 0.4em`；正文段落 `0.55em 0`。标题上留白 > 下留白 > 段间距。
+   - **配色约束**：文字一律 `color: inherit`，背景 `background-color: transparent`；边框、分隔线、代码底色、callout 底色只用中性半透明灰 `rgba(127,127,127,α)`（α 取 0.08–0.6）；表格顶/底与 th 下边线用 `currentColor`。**禁止**写死 `#000`/`#fff`，**禁止**写 `@media (prefers-color-scheme: dark)` 块；深浅色与阅读器强制反色都靠继承当前文字色。
+   - **代码/表格/图题**：代码块 0.9em、行高 1.6、中性灰底 + 1px 灰边 + 左侧 4px 灰条；行内代码 0.9em；表格 0.95em、行高 1.6；图题/表题 0.9em、行高 1.6、`opacity: 0.82`、居中。三者都小于正文 1em、大于注释字号，形成「正文 > 表格 > 代码 = 图题」的次级节奏。
+   - **分页**：标题 `page-break-after: avoid`；figure、表格、代码块、callout `page-break-inside: avoid`；封面 `break-after: page`。
 4. 字体子集化嵌入（LXGW WenKai -> WOFF2）。
 5. `scripts/epub-zip.mjs` 打包（Node 内置 zlib，零依赖；mimetype STORED 且为第一），产物按书名输出 `<书名>.epub`。
 6. 检查与修复循环（check ⇄ fix，≤3 轮）：`node scripts/epub-check.mjs --project epub --fix`——每章 XML 良构校验（标签配对/未转义 `&`/裸 `<`，阅读器能否打开的硬闸门）+ 安全规则自动修复（`className`->`class`、裸 `&`->`&amp;`）+ 包结构检查（manifest/spine/nav/mimetype STORED）；规则修不掉的按章交给子 agent 对照 MDX 原文修，复查 `--only <slug>`；全部通过后重跑 `lbuild-epub.mjs` 重新打包。
@@ -584,7 +604,9 @@ references:
 | Nextra 构建 MDX 解析错误 `<` | 正文裸 `<` 被识别为 JSX | 转义 `&lt;`/`&gt;` 或包反引号 |
 | Nextra `npm run build` i18n 告警 | Nextra pages/zh + Next.js i18n 同存 | 已知告警，可忽略 |
 | Docker 构建后容器秒挂 | `next.config.mjs` 未设 `output: 'standalone'` | 开启 standalone；Dockerfile COPY public/ |
-| EPUB 文字变白看不见 | 阅读器误触发 dark scheme | 强制白底黑字 `!important`；删掉 dark media 块 |
+| EPUB 文字变白/反色后看不清 | 写死黑色文字、白色底或加了 dark media 块 | 文字 `color: inherit`、背景 `transparent`、边框与底色用 `rgba(127,127,127,α)`；删除 `@media (prefers-color-scheme: dark)`，把主题交给阅读器 |
+| 产物仍是 `book.epub` / `main.pdf` / `book.pdf` | 手工编译后没走统一构建入口 | 用 `build-book.mjs --format=...`；`lbuild-epub.mjs` 会清理旧 `book.epub`，`build-book.mjs` 会清理 `main.pdf` / `book.pdf` |
+| 产物文件名与书名不符 / 出现乱码 | 书名没从 `metadata/outline.md` 解析到，或非法字符未清洗 | 检查 outline 一级标题；必要时 `--title` 覆盖；命名规则只在 `book-meta.mjs` 维护，别在脚本里另写一套 |
 | EPUB 嵌入字体让书变 30MB | 用了完整 TTF | fontTools 子集化转 WOFF2，单字体 ~300KB |
 | EPUB 打包后打不开 | mimetype 不是第一/被压缩 | 必须用 `scripts/epub-zip.mjs`（Node 内置 zlib，零依赖），mimetype STORED 且为第一 |
 | PDF 出现 `\| --- \|` Markdown 表格 | 未转 LaTeX 表格 | mdx2tex 脚本必须把 GFM 表格转为 booktabs/tabularx |
@@ -646,6 +668,7 @@ references:
 | 图 | 36 张正文图 + 1 张封面 | 每章 ≥2，产物、正文引用、图题齐全 |
 | 可运行代码块 | 80 个 | 全部带 L1/L2/L3 标记与 `metadata/verify/` 实测记录 |
 | 三链 | LaTeX / Typst / EPUB 各 14/14 通过 | 零编译错误，封面/目录/页码衔接正常 |
+| 产物命名 | EPUB `epub/<书名>.epub`；LaTeX `latex/<书名>.pdf`；Typst `typst/<书名>.pdf` | 书名由 `book-meta.mjs` 解析并清洗；同名中间产物 `main.pdf` / `book.pdf` / `book.epub` 均已清理 |
 
 > 这组数字是可复查的验收基线，不是「建议这样做」的口号。规则是否有效，用它们对照：图数、代码块数、三链通过率都能当场复算。样书只以「一本库框架类样书」指代，不写书名、作者、仓库路径或可反查的目录结构。本轮为 3 章补写章末回收段共 516 字，body3 由 81,428 → 81,944，三章综合段占比 9.5% / 10.7% / 10.0% → 12.4% / 13.2% / 12.2%；含回收段章节按 10%–18% 判定（下限 10% 不变），全书 14 章均无越界，16.8% 与 15.8% 两章按结构副作用保留，未删字压比例。
 
@@ -688,7 +711,7 @@ references:
 部署到 Vercel。
 ```
 
-执行：按上述阶段 0–6 全流程，最终交付 `Dapr-CookBook/{mdx,latex-pdf,nextra-site,typst}/`。
+执行：按上述阶段 0–6 全流程，最终交付 `Dapr-CookBook/{mdx,latex,nextra-site,epub,typst}/`。
 
 ---
 

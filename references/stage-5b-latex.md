@@ -6,7 +6,7 @@
 
 ### 1. 初始化工程目录
 
-在 `latex-pdf/latex/` 下创建标准结构：
+在 `latex/` 下创建标准结构：
 - `main.tex`（使用 `assets/elegantbook-main.template.tex.txt` 模板）
 - `chapters/` 每章一个 `.tex`（由 LLM 生成）
 - `figures/` 图片（从 `mdx/public/figures/` 拷贝）
