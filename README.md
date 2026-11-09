@@ -55,7 +55,7 @@
   - **Nextra v3 网站**：基于 [Nextra](https://nextra.site)，支持明暗模式、全文搜索、i18n、KaTeX、一键 Vercel/Docker 部署
   - **优化 EPUB**：标题 h1–h4 按 1.9/1.5/1.22/1.08em 分级（相对单位、`inherit` 配色，深浅色与阅读器反色均可读）、LXGW WenKai 子集化嵌入、booktabs 表格、tcolorbox 风格代码块、按书名输出
   - **Typst PDF**：基于 [ilm](https://typst.app/universe/package/ilm) 模板，LXGW WenKai 中文字体、四色 callout 提示框、booktabs 表格、代码块圆角边框
-- 🌏 **中英文 README 自动生成**（书籍项目自带）
+- 🌏 **书籍项目中英文 README**（阶段 6 由 agent 按模板生成，非脚本自动产出）
 
 ## 何时使用
 

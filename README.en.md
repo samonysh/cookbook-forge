@@ -55,7 +55,7 @@ It consolidates the core capabilities of three pre-existing Skills:
   - **Nextra v3 website**: built on [Nextra](https://nextra.site), with dark mode, full-text search, i18n, KaTeX, one-click Vercel/Docker deploy
   - **Optimized EPUB**: h1–h4 typographic hierarchy at 1.9/1.5/1.22/1.08em (relative units, `inherit`-based colors readable in light/dark and inverted themes), subset-embedded LXGW WenKai, booktabs tables, tcolorbox-style code blocks, titled output
   - **Typst PDF**: built on [ilm](https://typst.app/universe/package/ilm) template, LXGW WenKai CJK fonts, four-color callout boxes, booktabs tables, rounded code blocks
-- 🌏 Auto-generates bilingual (Chinese/English) README for the produced book project
+- 🌏 Bilingual (Chinese/English) README for the produced book project (written by the agent in stage 6 from the template, not by a script)
 
 ## When to Use
 
