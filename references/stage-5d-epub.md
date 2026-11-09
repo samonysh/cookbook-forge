@@ -36,15 +36,17 @@ LLM 转换 vs 脚本转换的优势：
 ### 3. CSS 样式
 
 使用 `assets/stylesheet.template.css`（epub-reader-optimizer 风格），已优化：
-- **强制白底黑字** `!important`（防编辑器误触发 dark scheme 导致白底白字）
+- **标题层级**：h1/h2/h3/h4 分别 1.9 / 1.5 / 1.22 / 1.08em（相对正文 1em），字重 700/700/600/600，行高随字号收紧，上间距 2 / 1.6 / 1.3em 逐级递减，级差一眼可辨
+- **可反转配色**：文字一律 `color: inherit`，背景 `transparent`，边框/分隔线/代码底用中性半透明灰 `rgba(127,127,127,…)`；不写死黑/白，深浅色模式与阅读器强制反色均可读
 - 中文字体栈：LXGW WenKai / 霞鹜文楷 / Source Han Serif / SimSun
 - 代码字体：LXGW WenKai Mono / Source Code Pro / Consolas
-- 代码块 tcolorbox 风格（浅灰背景 `#f8f9fb` + 圆角 + 左侧 4px 蓝条 `#4a90d9`）
-- 表格 booktabs 风格（顶/底 2px 粗线 + 行间 1px 细线）
-- Callout 卡片四色左边框（蓝/橙/红/绿对应 chapteroutline/recipe/pitfall/keypoints）
-- 响应式图片（`max-width: 100%`）
+- 代码块：中性半透明灰底 + 圆角 + 左侧 4px 灰条，0.9em，长行自动换行
+- 表格 booktabs 风格（顶/底 2px `currentColor` 粗线 + 行间 1px 半透明细线），0.95em
+- Callout 卡片：中性半透明底 + 左侧 4px 语义色边框（蓝/橙/红/绿对应 chapteroutline/recipe/pitfall/keypoints）
+- 响应式图片（`max-width: 100%`），封面等比 `object-fit: contain`
+- 图题/表题 0.9em、居中、`opacity: 0.82`，与标题留白协调
 - 数学公式行内/块级样式
-- 不写 `@media (prefers-color-scheme: dark)` 块（防白底白字）
+- 不写 `@media (prefers-color-scheme: dark)` 块：不锁死配色，交给阅读器主题
 - 分页控制（标题/代码块/图表 `page-break-inside: avoid`）
 
 ### 4. 字体子集化嵌入（必须）
@@ -59,10 +61,12 @@ LLM 转换 vs 脚本转换的优势：
 
 ### 6. 打包
 
-用 `scripts/epub-zip.mjs`（Node 内置 zlib，零依赖；**不要用 PowerShell Compress-Archive 或 Python zipfile 手工打包**），保证：
+用 `scripts/epub-zip.mjs`（Node 内置 zlib，零依赖；**不要用 PowerShell Compress-Archive 或 Python zipfile 手工打包**），产物按书名输出 `epub/<书名>.epub`，并保证：
 - `mimetype` 第一个条目且 STORED（不压缩）
 - 其他文件 DEFLATE 压缩
 - 打包后遍历 central directory 二次校验（条目数、mimetype 位置与压缩方式）
+
+书名解析优先级：`--title` > `metadata/outline.md` 一级标题 > `latex/main.tex` 的 `\title{}`；文件名只取主标题（冒号前），非法字符与路径分隔符清洗为 `-`，兼容 Windows/macOS/Linux。
 
 **封面（机制不变）**：`lbuild-epub.mjs` 会识别 `figures/cover.(png|jpe?g)`，自动生成 `cover.xhtml`
 作为 spine 首项，并在 `content.opf` 中登记 `properties="cover-image"` 与
@@ -80,7 +84,7 @@ node scripts/epub-check.mjs --project epub --fix
 
 - **静态 lint + XML 良构校验**（`scripts/lib/epub-lint.mjs`，纯 JS 零依赖）：标签配对/交叉嵌套、属性引号、未转义 `&`、裸 `<`（这是阅读器能否打开的**硬闸门**，等价于编译检查）；Markdown 标题/粗体、JSX `className` 残留、图片文件存在性；跳过 `<pre>/<code>` 内容
 - **`--fix` 安全修复**：`className` -> `class`、裸 `&` -> `&amp;`、`**x**` -> `<strong>x</strong>`（保护代码段后修复再还原）
-- **包结构检查**：content.opf manifest/spine 完整性（资源未登记/引用缺失）、nav.xhtml 存在、book.epub 的 mimetype 第一且 STORED
+- **包结构检查**：content.opf manifest/spine 完整性（资源未登记/引用缺失）、nav.xhtml 存在、`<书名>.epub` 的 mimetype 第一且 STORED（产物名由 `scripts/lib/book-meta.mjs` 解析，不硬编码）
 - 规则修不掉的按章对照 MDX 原文交给子 agent 修，复查：`node scripts/epub-check.mjs --project epub --only <slug>`
 - 全部通过后重跑 `node scripts/lbuild-epub.mjs` 重新打包
 

@@ -2,7 +2,7 @@
 name: "cookbook-forge"
 slug: "cookbook-forge"
 displayName: "Cookbook Forge"
-version: "1.10.3"
+version: "1.11.0"
 license: "MIT"
 summary: "从多源资料生成深度技术 CookBook / Handbook / Survey，产出 MDX -> ElegantBook PDF、Nextra 网站、优化 EPUB、Typst PDF。"
 description: "Generates deep technical CookBooks, Handbooks, and Surveys from user materials (websites, PDFs, EPUBs, GitHub repos, arxiv papers, docs). Produces MDX chapters first, then ElegantBook LaTeX/PDF, Nextra website, optimized EPUB, and Typst PDF. Invoke when user asks to write a Cookbook, handbook, survey, technical book, or structured long-form documentation for a project/domain."
@@ -67,8 +67,9 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `scripts/lmdx2typst.mjs` - **LLM 驱动**的 MDX -> Typst（ilm 模板）转换器。通过子 agent 逐章节调用 LLM 智能转换为 Typst 原生语法。排版规则（标题/图表编号、callout 调色板、字体）由 `assets/typst-default.config.json` 配置驱动（工作目录 `typst.config.json` 或 `--config` 可覆盖）。组装后自动对已转换章节做快速静态 lint。
 - `scripts/typst-check.mjs` - Typst 工程质量检查 CLI：静态 lint（`_lint_report.json`，含表格 hline 重复/越界/行列一致性、callout 闭合/颜色键/嵌套、章节引用完整性、代码块长行与裸 `@` 校验）+ 固化规则自动修复与确定性优化（`--fix`：数学块规则修复（含 `\oplus`/`\rightarrow` 等符号映射）+ 标题手动编号剥离 + figure label 自动注入 `<fig-C-S>`/`<tab-C-S>` + 纯文本图/表引用转 `@fig-C-S` 交叉引用 + 章节标题 label 注入 `<ch-<slug>>`/`<sec-<slug>-<seq>>` + 长表格注入 `breakable: true` + callout 类型名映射颜色键/补缺失标题，全部幂等）+ 每章独立 probe 并行编译（`--compile`，`_check_report.json`，错误经知识库映射附带 `suggestion`，跨章引用误报自动过滤），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/typst-lint.mjs` 与优化器 `scripts/lib/typst-optimize.mjs`（借鉴 pdf-to-typst-notes 的 compile_check.py / fix_common.py）。
 - `scripts/word-count.mjs` - 字数统计（与 `ratio-count.mjs` 共用 `scripts/lib/word-caliber.mjs`：只算正文 CJK，剔除代码块/HTML 注释/meta，表格按 1/2 计数）。
-- `scripts/lbuild-epub.mjs` - **LLM 驱动**的 MDX -> EPUB3 转换器。通过子 agent 逐章节调用 LLM 智能转换为 XHTML，然后组装为 EPUB。组装后自动对已转换章节做静态 lint + XML 良构校验，并生成 `_TODO_EPUB_FIX.md` 修复任务清单。
-- `scripts/epub-check.mjs` - EPUB 工程质量检查 CLI：静态 lint + 每章 XML 良构校验（纯 JS 零依赖，`_lint_report.json`）+ 安全规则自动修复（`--fix`）+ 包结构检查（manifest/spine/nav/mimetype，`_check_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/epub-lint.mjs`。
+- `scripts/lbuild-epub.mjs` - **LLM 驱动**的 MDX -> EPUB3 转换器。通过子 agent 逐章节调用 LLM 智能转换为 XHTML，然后组装为 EPUB。组装后自动对已转换章节做静态 lint + XML 良构校验，并生成 `_TODO_EPUB_FIX.md` 修复任务清单。产物按书名输出 `<书名>.epub`（书名取自 `metadata/outline.md` 或 `--title`）。
+- `scripts/epub-check.mjs` - EPUB 工程质量检查 CLI：静态 lint + 每章 XML 良构校验（纯 JS 零依赖，`_lint_report.json`）+ 安全规则自动修复（`--fix`）+ 包结构检查（manifest/spine/nav/mimetype，`_check_report.json`），check ⇄ fix 循环 ≤3 轮；配套规则库 `scripts/lib/epub-lint.mjs`。产物定位复用 `scripts/lib/book-meta.mjs`，不硬编码文件名。
+- `scripts/build-book.mjs` - 统一构建入口：`node scripts/build-book.mjs --format=all|epub|latex|typst [--root=<book>]`。按书名解析结果把 EPUB 与两版 PDF 输出为 `<书名>.epub` / `<书名>.pdf`；LaTeX/Typst 先编译成 `main.pdf` 再重命名，规避非 ASCII jobname 的兼容问题。书名解析与文件名清洗见 `scripts/lib/book-meta.mjs`。
 - `scripts/typst-fonts-check.mjs` - P1-4 字体可用性预检：运行 `typst fonts` 与配置 `fonts` 栈比对，报告缺失字体（编译前预检一次即可避免中文豆腐块）。
 - `scripts/kroki-render.mjs` - PlantUML 通过 Kroki.io 远程渲染（deflate+base64url 编码 GET，含隐私提示）。
 - `scripts/render-figures.mjs` - 图位与图源对齐：扫描 `<!-- FIGURE: fig-NN-M ... -->`，优先调用 `assets/diagram-style/export_svg.py` 把 `mdx/public/diagrams-src/<id>.html` 导出为 `mdx/public/figures/<id>.svg`，校验正文引用与每章 ≥2 图，报告写 `metadata/figure-report.txt`。
@@ -462,7 +463,7 @@ references:
 2. 对每个 MDX 文件，使用 Task 工具启动子 agent，读取 `assets/prompts/mdx-to-latex.md` 转换规则，输出 `.tex` 章节文件。
 3. 使用 `scripts/lmdx2tex.mjs` 组装 main.tex。
 4. 检查与修复循环（check ⇄ fix，≤3 轮）：`node scripts/latex-check.mjs --project latex --fix --compile`——静态 lint + 安全规则自动修复（`**x**`->`\textbf{x}`、链接转 `\href`）+ 每章独立 probe 并行 xelatex 编译（N 章错误一次全部暴露，`_check_report.json`）；规则修不掉的按章交给子 agent 对照 MDX 原文修，复查 `--compile --only <slug>`。
-5. xelatex 两遍编译出 PDF。
+5. 构建 PDF：`node scripts/build-book.mjs --format=latex`（内部 xelatex 两遍，并按书名重命名为 `<书名>.pdf`）。
 6. **质量检查**：`latex-check.mjs --fix --compile` 退出码 0、编译零 error、PDF 无 Markdown 残留、表格为 LaTeX 环境、代码块为 tcolorbox 样式、封面非空；修复发现的问题后重新编译验证。
 
 #### 5c. Nextra v3 网站
@@ -482,9 +483,9 @@ references:
 从 `mdx/` 生成 EPUB，使用 **LLM 逐章节转换**流程：
 1. 对每个 MDX 文件，使用 Task 工具启动子 agent，读取 `assets/prompts/mdx-to-epub.md` 转换规则，输出 XHTML 章节文件。
 2. 使用 `scripts/lbuild-epub.mjs` 组装 EPUB3 结构。
-3. CSS 样式（白底黑字、中文字体、代码块 tcolorbox 风格、四色 callout）。
+3. CSS 样式：标题 h1/h2/h3/h4 按 1.9/1.5/1.22/1.08em 分级（相对单位），正文 1em、行高 1.8；文字与背景用 `inherit`/`transparent` + 中性半透明灰边框，深浅色与阅读器反色均可读。
 4. 字体子集化嵌入（LXGW WenKai -> WOFF2）。
-5. `scripts/epub-zip.mjs` 打包（Node 内置 zlib，零依赖；mimetype STORED 且为第一）。
+5. `scripts/epub-zip.mjs` 打包（Node 内置 zlib，零依赖；mimetype STORED 且为第一），产物按书名输出 `<书名>.epub`。
 6. 检查与修复循环（check ⇄ fix，≤3 轮）：`node scripts/epub-check.mjs --project epub --fix`——每章 XML 良构校验（标签配对/未转义 `&`/裸 `<`，阅读器能否打开的硬闸门）+ 安全规则自动修复（`className`->`class`、裸 `&`->`&amp;`）+ 包结构检查（manifest/spine/nav/mimetype STORED）；规则修不掉的按章交给子 agent 对照 MDX 原文修，复查 `--only <slug>`；全部通过后重跑 `lbuild-epub.mjs` 重新打包。
 7. **质量检查**：`epub-check.mjs --fix` 退出码 0、XHTML 全部良构、所有图片/字体/章节在 manifest 中、mimetype 第一且 STORED；修复发现的问题后重新打包验证。
 
@@ -497,7 +498,7 @@ references:
 2. 对每个 MDX 文件，使用 Task 工具启动子 agent，读取 `assets/prompts/mdx-to-typst.md` 转换规则，输出 `.typ` 章节文件（Typst 原生语法，严禁混用 LaTeX 语法；标题**不写手动编号**——「第 C 章 / C.S / 图 C-S」由模板自动编号；prompt 内含官方语法判据：数学内裸中文/缩写必须加引号、数学调用参数 `#` 前缀、`dif`/`dot.c`/`mat` 等符号纠错、输出前自查清单）。
 3. 重新运行 `scripts/lmdx2typst.mjs` 组装最终 `main.typ`（使用 ilm 模板，中文字体 LXGW WenKai、代码块圆角边框、四色 callout 提示框，编号/调色板/字体按配置生成），同时自动 lint 已转换章节。
 4. 检查与修复循环（check ⇄ fix，≤3 轮）：`node scripts/typst-check.mjs --project typst --fix --compile`——静态 lint + 固化规则自动修复（数学块内 `\frac`->`frac()`、`\oplus`/`\rightarrow` 等符号映射、裸中文/缩写加引号、参数补 `#`、图片路径修正）+ 确定性优化器（剥离标题手动编号、为 figure 注入 `<fig-C-S>`/`<tab-C-S>` label、纯文本引用「图 C-S」转 `@fig-C-S` 交叉引用、为标题注入 `<ch-<slug>>`/`<sec-<slug>-<seq>>` label 并把「第 N 章」引用转 `@ch-<slug>`、超 `tables.splitThreshold` 行的长表格注入 `breakable: true`、callout 类型名映射颜色键并补缺失标题；全部幂等，label/引用 pass 覆盖全部章节以支持跨章引用）+ 每章独立 probe 并行编译（N 章错误一次全部暴露，`_check_report.json`，错误附带知识库 `suggestion`，跨章引用误报自动过滤）；规则修不掉的按章交给子 agent 对照 MDX 原文修，复查 `--compile --only <slug>`。若 PDF 中文变豆腐块，先跑 `node scripts/typst-fonts-check.mjs` 预检字体。
-5. 编译：`cd typst && typst compile main.typ`。
+5. 编译：`node scripts/build-book.mjs --format=typst`（内部 `typst compile main.typ main.pdf` 后按书名重命名为 `<书名>.pdf`）。
 6. **质量检查**：`typst-check.mjs --fix --compile` 退出码 0、无 Markdown/LaTeX 语法残留、数学公式使用 Typst 原生语法、标题无手动编号双编号、figure 均有 label 且引用为交叉引用（无悬空引用）、表格使用 `table()` + `table.hline()`（hline 无重复/越界、长表已注入 `breakable: true`）、callout 颜色键合法且内容块 `[ ]` 闭合、章节标题有 `ch-`/`sec-` label 且章节引用无悬空、代码块无超长行/裸 `@`、中文字体正确配置、无残留占位符；修复发现的问题后重新编译验证。
 
 模板样式优化（基于 ilm 模板）：
@@ -523,7 +524,7 @@ references:
 7. 最终回复给用户：
    - 各输出格式子文件夹链接
    - 章节数 / 字数 / 图表数统计
-   - 本地预览命令（Nextra：`cd nextra-site && npm install && npm run dev`；PDF：直接打开 PDF；EPUB：直接打开；Typst：`cd typst && typst compile main.typ`）
+   - 本地预览命令（Nextra：`cd nextra-site && npm install && npm run dev`；PDF/EPUB：直接打开 `<书名>.pdf` / `<书名>.epub`；Typst：`node scripts/build-book.mjs --format=typst`）
    - 未完成项/资料限制说明
 
 ---
@@ -551,10 +552,10 @@ references:
 - [ ] 提交前制度自查：`git log -p --all` 对项目名/模块包名/框架名/用户名 0 命中；`git ls-files` 不含上述产物与构建目录；有命中则先做仓库外 bundle 备份，再重写历史
 - [ ] `metadata/sources.md` 记录所有参考资料
 - [ ] MDX 输出存在且 `_meta.ts` 章节顺序正确
-- [ ] 若输出 LaTeX/PDF：`latex-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；xelatex 两遍编译成功；封面检查通过（存在、1280×1024、非空白，见 `_cover_report.json`）；PDF 无 Markdown 残留
+- [ ] 若输出 LaTeX/PDF：`latex-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；`build-book.mjs --format=latex` 成功且产物为 `<书名>.pdf`；封面检查通过（存在、1280×1024、非空白，见 `_cover_report.json`）；PDF 无 Markdown 残留
 - [ ] 若输出 Nextra：`npm run build` 成功；Docker healthy；`/zh` 200；所有图表 200
-- [ ] 若输出 EPUB：`epub-check.mjs --fix` 退出码 0（每章 XML 良构 + 包结构全通过）；mimetype 第一且 STORED；字体子集化嵌入；代码块/表格样式生效
-- [ ] 若输出 Typst：`typst-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；typst compile 零 error；无 Markdown/LaTeX 语法残留；数学公式使用 Typst 原生语法、数学块内无裸中文/裸缩写、数学调用参数 `#` 前缀齐全；标题无手动编号（模板自动编号，无双编号）；figure 均有 `<fig-C-S>`/`<tab-C-S>` label、引用为 `@fig-C-S` 交叉引用且无悬空引用；优化器幂等（重跑 `--fix` 零变更）；表格使用 table() + table.hline() 且 hline 无重复/越界、长表（> splitThreshold 行）已注入 `breakable: true`；callout 颜色键合法、内容块 `[ ]` 闭合、无嵌套 callout；章节标题有 `ch-`/`sec-` label、章节引用不指向不存在的章号；代码块无超长行/裸 `@`；图片路径 `../figures/`；字体预检通过；中文字体正确配置
+- [ ] 若输出 EPUB：`epub-check.mjs --fix` 退出码 0（每章 XML 良构 + 包结构全通过）；产物为 `<书名>.epub`；mimetype 第一且 STORED；字体子集化嵌入；标题层级与代码块/表格/图题样式生效
+- [ ] 若输出 Typst：`typst-check.mjs --fix --compile` 退出码 0（每章 probe 编译全通过）；`build-book.mjs --format=typst` 成功且产物为 `<书名>.pdf`；无 Markdown/LaTeX 语法残留；数学公式使用 Typst 原生语法、数学块内无裸中文/裸缩写、数学调用参数 `#` 前缀齐全；标题无手动编号（模板自动编号，无双编号）；figure 均有 `<fig-C-S>`/`<tab-C-S>` label、引用为 `@fig-C-S` 交叉引用且无悬空引用；优化器幂等（重跑 `--fix` 零变更）；表格使用 table() + table.hline() 且 hline 无重复/越界、长表（> splitThreshold 行）已注入 `breakable: true`；callout 颜色键合法、内容块 `[ ]` 闭合、无嵌套 callout；章节标题有 `ch-`/`sec-` label、章节引用不指向不存在的章号；代码块无超长行/裸 `@`；图片路径 `../figures/`；字体预检通过；中文字体正确配置
 
 ---
 

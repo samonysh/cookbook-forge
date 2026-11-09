@@ -7,7 +7,7 @@
 //
 // 用法（CLI）：node lbuild-epub.mjs [--title "书名"]
 //   - 输入：工作目录下 mdx/*.mdx
-//   - 输出：epub/book.epub
+//   - 输出：epub/<书名>.epub（书名取自 metadata/outline.md 或 --title）
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -16,6 +16,7 @@ import { parseFrontmatter, stripHtmlComments } from "./lib/mdx-utils.mjs";
 import { extractDiagramBlocks, renderAll, replaceBlocks } from "./lib/diagram-renderer.mjs";
 import { lintXhtml } from "./lib/epub-lint.mjs";
 import { buildEpub } from "./epub-zip.mjs";
+import { resolveBookMeta } from "./lib/book-meta.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,7 +29,12 @@ function getArg(name, def) {
   if (i >= 0 && i + 1 < args.length) return args[i + 1];
   return def;
 }
-const BOOK_TITLE = getArg("title", "CookBook");
+const BOOK_META = await resolveBookMeta({
+  root: process.cwd(),
+  cliTitle: getArg("title", null),
+});
+const BOOK_TITLE = BOOK_META.fullTitle;
+const BOOK_FILE_BASE = BOOK_META.fileBase;
 const BOOK_LANG = getArg("lang", "zh-CN");
 
 // ---------- 目录配置 ----------
@@ -319,40 +325,54 @@ let css = await fs.readFile(cssSrc, "utf8");
 // 追加 CookBook 专用样式
 css += `
 /* === CookBook Forge LLM Converter 追加样式 === */
-.cover-page { margin: 0; padding: 0; text-align: center; }
-.cover-page img { max-width: 100%; max-height: 100vh; page-break-after: always; }
+/* 配色一律用中性灰或语义色边框 + 半透明底，不写死黑/白，兼容深浅色与阅读器反色 */
+.cover-page { margin: 0; padding: 0; text-align: center; page-break-after: always; break-after: page; }
+.cover-page img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100vh;
+  object-fit: contain;
+  margin: 0 auto;
+}
 .callout {
-  margin: 1em 0;
-  padding: 0.75em 1em;
+  margin: 1.3em 0;
+  padding: 0.9em 1em;
+  background-color: rgba(127,127,127,0.08);
+  border-left: 4px solid rgba(127,127,127,0.6);
   border-radius: 4px;
+  color: inherit;
   page-break-inside: avoid;
   break-inside: avoid;
 }
-.callout-chapteroutline { border-left: 4px solid #3b82f6; background: rgba(59,130,246,0.08); }
-.callout-recipe         { border-left: 4px solid #f59e0b; background: rgba(245,158,11,0.08); }
-.callout-pitfall        { border-left: 4px solid #ef4444; background: rgba(239,68,68,0.08); }
-.callout-keypoints      { border-left: 4px solid #22c55e; background: rgba(34,197,94,0.08); }
-.callout h4 { margin-top: 0; color: #000000 !important; }
+.callout-chapteroutline { border-left-color: #3b82f6; }
+.callout-recipe         { border-left-color: #f59e0b; }
+.callout-pitfall        { border-left-color: #ef4444; }
+.callout-keypoints      { border-left-color: #22c55e; }
+.callout h4 { margin-top: 0; color: inherit; }
 
 table.gfm-table {
   display: table;
   border-collapse: collapse;
-  margin: 1em auto;
+  margin: 1.4em auto;
   width: auto;
   max-width: 100%;
-  border-top: 2px solid #000000;
-  border-bottom: 2px solid #000000;
+  border-top: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  font-size: 0.95em;
+  color: inherit;
 }
 table.gfm-table th {
   font-weight: 700;
-  color: #000000 !important;
-  border-bottom: 1.5px solid #000000;
-  padding: 0.45em 0.8em;
+  color: inherit;
+  border-bottom: 1.5px solid currentColor;
+  padding: 0.5em 0.8em;
   text-align: left;
 }
 table.gfm-table td {
-  padding: 0.45em 0.8em;
-  border-bottom: 1px solid #cccccc;
+  padding: 0.5em 0.8em;
+  border-bottom: 1px solid rgba(127,127,127,0.35);
   vertical-align: top;
 }
 table.gfm-table thead { border-top: none; }
@@ -361,20 +381,23 @@ table.gfm-table tbody tr:last-child td { border-bottom: none; }
 .math-inline {
   font-family: "Cambria Math", "Latin Modern Math", "Times New Roman", serif;
   font-style: italic;
+  color: inherit;
 }
 .math-block {
   text-align: center;
-  margin: 1em 0;
+  margin: 1.2em 0;
   font-family: "Cambria Math", "Latin Modern Math", "Times New Roman", serif;
   font-style: italic;
   overflow-x: auto;
+  color: inherit;
 }
 
 figure {
   display: block;
   text-align: center;
-  margin: 1.2em auto;
+  margin: 1.4em auto;
   page-break-inside: avoid;
+  break-inside: avoid;
 }
 figure img {
   display: block;
@@ -384,38 +407,43 @@ figure img {
 }
 figcaption {
   display: block;
-  font-size: 0.95em;
-  color: #000000 !important;
+  font-size: 0.9em;
+  line-height: 1.6;
+  color: inherit;
+  opacity: 0.82;
   text-align: center;
-  margin: 0.4em auto 0.8em;
+  margin: 0.5em auto 1em;
 }
 
 .diagram-placeholder {
   text-align: center;
-  color: #666;
-  font-size: 0.9em;
-  border: 1px dashed #aaa;
-  padding: 1.5em;
-  margin: 1em 0;
-  background: #f9f9f9;
+  color: inherit;
+  opacity: 0.9;
+  font-size: 0.92em;
+  border: 1px dashed rgba(127,127,127,0.6);
+  border-radius: 3px;
+  padding: 1.2em;
+  margin: 1.2em 0;
+  background: transparent;
 }
 
 pre.code-block {
   display: block;
-  background: #f8f9fb !important;
-  border: 1px solid #d4d8de !important;
-  border-left: 4px solid #4a90d9 !important;
+  background: rgba(127,127,127,0.1) !important;
+  border: 1px solid rgba(127,127,127,0.3) !important;
+  border-left: 4px solid rgba(127,127,127,0.6) !important;
   border-radius: 6px;
   padding: 0.8em 1em;
-  margin: 1em 0;
+  margin: 1.2em 0;
   font-family: "LXGW WenKai Mono", "Source Code Pro", Consolas, monospace !important;
-  font-size: 0.92em !important;
+  font-size: 0.9em !important;
   line-height: 1.6;
   overflow-x: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
-  color: #2d2d2d !important;
+  color: inherit !important;
   page-break-inside: avoid;
+  break-inside: avoid;
 }
 pre.code-block code {
   display: inline;
@@ -427,16 +455,17 @@ pre.code-block code {
 }
 code:not(pre code) {
   font-family: "LXGW WenKai Mono", "Source Code Pro", Consolas, monospace !important;
-  font-size: 0.93em;
-  background: #f0f2f5 !important;
+  font-size: 0.92em;
+  background: rgba(127,127,127,0.12) !important;
+  color: inherit;
   padding: 0.1em 0.3em;
   border-radius: 3px;
 }
 
 hr {
   border: none;
-  border-top: 1px solid #ccc;
-  margin: 1.5em 0;
+  border-top: 1px solid rgba(127,127,127,0.45);
+  margin: 1.6em 0;
 }
 `;
 await fs.writeFile(path.join(OEBPS, "css", "stylesheet.css"), css, "utf8");
@@ -451,7 +480,12 @@ for (const c of chapterFiles) {
 // ---------- 打包 EPUB（scripts/epub-zip.mjs，Node 零依赖）----------
 console.log("\n━━━ 打包 EPUB ━━━");
 
-const epubOut = path.join(outDir, "book.epub");
+const epubOut = path.join(outDir, `${BOOK_FILE_BASE}.epub`);
+// 清理旧版通用名 book.epub，避免检查脚本或分发时误取旧产物
+const legacyEpub = path.join(outDir, "book.epub");
+if (path.resolve(legacyEpub) !== path.resolve(epubOut)) {
+  try { await fs.unlink(legacyEpub); } catch {}
+}
 await buildEpub(buildDir, epubOut);
 const epubKb = ((await fs.stat(epubOut)).size / 1024).toFixed(1);
 console.log(`EPUB OK: ${epubKb} KB → ${epubOut}`);
@@ -495,9 +529,9 @@ const plan = {
         "  4. Output must start with `<?xml` and have <h1>chapter title</h1> as the first element in <body>.",
         "After all tasks complete:",
         "  5. Run `node scripts/epub-check.mjs --project epub --fix` for per-chapter lint + XML well-formedness + package structure; fix remaining errors from `_lint_report.json`/`_check_report.json` (check<->fix loop, max 3 rounds).",
-        "  6. Re-run `node lbuild-epub.mjs` to regenerate content.opf/nav.xhtml and re-zip book.epub.",
+        "  6. Re-run `node lbuild-epub.mjs` to regenerate content.opf/nav.xhtml and re-zip the titled EPUB.",
       ]
-    : ["All chapters already converted; book.epub is ready.",
+    : ["All chapters already converted; the titled EPUB is ready.",
        "Run `node scripts/epub-check.mjs --project epub --fix` to validate chapters and package structure."],
 };
 await fs.writeFile(planPath, JSON.stringify(plan, null, 2), "utf8");

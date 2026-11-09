@@ -8,7 +8,7 @@
 //
 // 用法（API）：
 //   import { buildEpub } from "./epub-zip.mjs";
-//   await buildEpub("epub/build", "epub/book.epub");
+//   await buildEpub("epub/build", "epub/<book-title>.epub");
 //
 // EPUB 规范要点：
 // - mimetype 必须是 zip 中第一个条目

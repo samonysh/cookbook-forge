@@ -6,7 +6,7 @@
 // 对 EPUB 而言，"编译检查"的等价物是：
 //   1) 每章 XHTML 的 XML 良构性（阅读器打不开的硬闸门）；
 //   2) content.opf manifest/spine 完整性（资源未登记 / 引用缺失）；
-//   3) book.epub 的 zip 合规（mimetype 第一且 STORED）。
+//   3) <书名>.epub 的 zip 合规（mimetype 第一且 STORED）。
 //
 // 用法：
 //   node scripts/epub-check.mjs --project epub        # lint + 章节校验 + 包结构检查
@@ -22,6 +22,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { lintXhtml, fixXhtml, checkXmlWellFormed } from "./lib/epub-lint.mjs";
+import { resolveBookMeta } from "./lib/book-meta.mjs";
 
 // ---------- CLI 参数 ----------
 
@@ -247,7 +248,7 @@ async function checkPackage() {
   }
 
   // EPUB zip 合规（mimetype 第一且 STORED）—— 按实际产物名查找：
-  // lbuild-epub 产出 book.epub，部分项目按书名命名；统一 glob *.epub，排除隐藏/临时文件。
+  // lbuild-epub 按书名输出 <书名>.epub；这里用统一的书名解析结果定位，避免硬编码文件名。
   let epubPath = null;
   try {
     const entries = await fs.readdir(PROJECT, { withFileTypes: true });
@@ -266,8 +267,10 @@ async function checkPackage() {
         candidates.map(async (n) => ({ n, m: (await fs.stat(path.join(PROJECT, n))).mtimeMs }))
       );
       stats.sort((a, b) => b.m - a.m);
-      // 同时存在 book.epub 与书名版时，优先 book.epub；否则取最新产物
-      const preferred = stats.find((s) => s.n === "book.epub") || stats[0];
+      // 优先书名对应的产物；找不到再取最新产物
+      const meta = await resolveBookMeta({ root: path.dirname(PROJECT) });
+      const expected = `${meta.fileBase}.epub`;
+      const preferred = stats.find((s) => s.n === expected) || stats[0];
       epubPath = path.join(PROJECT, preferred.n);
     }
   } catch {}

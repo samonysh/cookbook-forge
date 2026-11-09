@@ -64,7 +64,7 @@ node scripts/latex-check.mjs --project latex --fix --compile
 ElegantBook 文档类依赖 `elegantbook.cls`，需要先准备好 cls 文件：
 - **TeXLive/MiKTeX 用户**：`tlmgr install elegantbook`（或在 TeXLive Manager 中搜索安装）
 - **手动获取**：从 [ElegantLaTeX/elegantbook](https://github.com/ElegantLaTeX/elegantbook) 下载 `elegantbook.cls`，复制到 `latex/` 目录
-- 准备好后运行：`cd latex && xelatex main.tex && xelatex main.tex`（两遍以生成目录/交叉引用）
+- 准备好后运行：`node scripts/build-book.mjs --format=latex`（内部执行 xelatex 两遍以生成目录/交叉引用，并把 `main.pdf` 重命名为 `<书名>.pdf`）；也可手工 `cd latex && xelatex main.tex && xelatex main.tex` 后再重命名
 
 ### 7. 质量闸门
 

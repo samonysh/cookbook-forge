@@ -1,6 +1,6 @@
 {
   "name": "cookbook-forge",
-  "version": "1.10.3",
+  "version": "1.11.0",
   "private": true,
   "type": "module",
   "description": "Domain CookBook / Handbook / Survey generator (Skill): MDX -> ElegantBook LaTeX/PDF, Nextra site, EPUB, Typst PDF",
@@ -14,6 +14,7 @@
     "lmdx2tex": "node scripts/lmdx2tex.mjs",
     "lmdx2typst": "node scripts/lmdx2typst.mjs",
     "lbuild-epub": "node scripts/lbuild-epub.mjs",
+    "build-book": "node scripts/build-book.mjs",
     "latex-check": "node scripts/latex-check.mjs",
     "typst-check": "node scripts/typst-check.mjs",
     "epub-check": "node scripts/epub-check.mjs",

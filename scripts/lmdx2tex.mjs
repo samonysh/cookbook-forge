@@ -20,6 +20,7 @@ import { execSync } from "node:child_process";
 import { parseFrontmatter, stripHtmlComments } from "./lib/mdx-utils.mjs";
 import { extractDiagramBlocks, renderAll, replaceBlocks } from "./lib/diagram-renderer.mjs";
 import { lintText } from "./lib/latex-lint.mjs";
+import { resolveBookMeta } from "./lib/book-meta.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,9 +33,14 @@ function getArg(name, def) {
   if (i >= 0 && i + 1 < args.length) return args[i + 1];
   return def;
 }
-const BOOK_TITLE = getArg("title", "CookBook");
+const BOOK_META = await resolveBookMeta({
+  root: process.cwd(),
+  cliTitle: getArg("title", null),
+  cliSubtitle: getArg("subtitle", null),
+});
+const BOOK_TITLE = BOOK_META.title;
 const BOOK_AUTHOR = getArg("author", "Cookbook Generator");
-const BOOK_SUBTITLE = getArg("subtitle", "");
+const BOOK_SUBTITLE = BOOK_META.subtitle;
 const BOOK_VERSION = getArg("version", "1.0");
 const BOOK_INSTITUTE = getArg("institute", "");
 

@@ -140,8 +140,10 @@ node scripts/typst-check.mjs --project typst --fix --compile
 ### 5. 编译
 
 ```bash
-cd typst && typst compile main.typ
+node scripts/build-book.mjs --format=typst
 ```
+
+内部执行 `cd typst && typst compile main.typ main.pdf`，再把 `main.pdf` 重命名为 `<书名>.pdf`（书名取自 `metadata/outline.md` 或 `--title`）。也可手工 `cd typst && typst compile main.typ "<书名>.pdf"`。
 
 或使用 Typst Web App：`https://typst.app/`
 

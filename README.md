@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.10.3"><img src="https://img.shields.io/badge/version-1.10.3-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.11.0"><img src="https://img.shields.io/badge/version-1.11.0-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -87,7 +87,8 @@ cookbook-forge/
 │   ├── lmdx2typst.mjs                    # LLM 驱动 MDX -> Typst（ilm 模板）转换
 │   ├── typst-check.mjs                   # Typst 静态 lint + 规则修复 + 每章并行 probe 编译
 │   ├── typst-fonts-check.mjs             # Typst 字体可用性预检
-│   ├── lbuild-epub.mjs                   # LLM 驱动 MDX -> EPUB3 转换
+│   ├── lbuild-epub.mjs                   # LLM 驱动 MDX -> EPUB3 转换（按书名输出）
+│   ├── build-book.mjs                    # 统一构建：EPUB / LaTeX PDF / Typst PDF 按书名命名
 │   ├── epub-check.mjs                    # EPUB 静态 lint + 每章 XML 良构校验 + 包结构检查
 │   ├── mdx2book.mjs                      # 确定性 MDX -> Typst/LaTeX/EPUB 章节转换（显式图号）
 │   ├── chapter-lint.mjs                  # 章节结构 lint（N.0–N.10、标记、图位、实测记录）
@@ -150,10 +151,10 @@ cookbook-forge/
 阶段 4  篇幅校准     → 按覆盖度扩写 Recipes/源码解析/速查表/附录；下限 5 万 CJK（body3 口径，表格按 1/2），不设逐章预算
 阶段 5  多格式转换（每种格式生成后子 agent 检查修复）
   5a.  MDX          （默认）
-  5b.  ElegantBook  -> xelatex 两遍编译 -> PDF
+  5b.  ElegantBook  -> xelatex 两遍编译 -> <书名>.pdf
   5c.  Nextra 网站  -> npm run build + Docker 验证
-  5d.  EPUB         -> 字体子集化 + CSS 重写 + epub-zip.mjs 打包
-  5e.  Typst        -> ilm 模板 + typst compile -> PDF
+  5d.  EPUB         -> 标题层级 CSS + 字体子集化 + epub-zip.mjs 打包 -> <书名>.epub
+  5e.  Typst        -> ilm 模板 + typst compile -> <书名>.pdf
 阶段 6  最终交付     → 中英文 README + 链接 + 统计报告
 ```
 
@@ -193,10 +194,10 @@ cookbook-forge/
 - [ ] 全书 `body3` ≥5 万 CJK（只算正文：剔除代码块、HTML 注释、meta；表格按 1/2 计数）；总量与模块权重一致，超出同类参考区间已写明理由
 - [ ] 三端产物不入库：书籍仓库不含 `*.pdf`、`*.epub` 与 `latex/`、`typst/`、`epub/`、`mdx/` 构建目录；发布走 tag + Release 附件
 - [ ] 封面通过 `latex-check.mjs` 闸门（存在、1280×1024、非空白）
-- [ ] PDF：`latex-check.mjs --fix --compile` 退出码 0；xelatex 编译通过；无 Markdown 残留
+- [ ] PDF：`latex-check.mjs --fix --compile` 退出码 0；`build-book.mjs --format=latex` 产出 `<书名>.pdf`；无 Markdown 残留
 - [ ] Nextra：`npm run build` 通过；Docker healthy；`/zh` 200
-- [ ] EPUB：`epub-check.mjs --fix` 退出码 0（每章 XML 良构 + 包结构）；mimetype 第一且 STORED；字体子集化嵌入；CSS 生效
-- [ ] Typst：`typst-check.mjs --fix --compile` 退出码 0；typst compile 零 error；无 Markdown/LaTeX 语法残留；数学块内无裸中文/裸缩写；中文字体正确配置
+- [ ] EPUB：`epub-check.mjs --fix` 退出码 0（每章 XML 良构 + 包结构）；产物为 `<书名>.epub`；mimetype 第一且 STORED；字体子集化嵌入；标题层级与代码块/表格样式生效
+- [ ] Typst：`typst-check.mjs --fix --compile` 退出码 0；`build-book.mjs --format=typst` 产出 `<书名>.pdf`；无 Markdown/LaTeX 语法残留；数学块内无裸中文/裸缩写；中文字体正确配置
 - [ ] Typst：`main.typ` 包含 `@preview/ilm:<version>` 与 `#show: ilm.with(...)`；缺失时 `--fix` 可自动重新补充
 - [ ] 图表：原始源码保留在 diagrams-src/，渲染产物在 figures/
 
@@ -225,8 +226,8 @@ npx skills add samonysh/cookbook-forge
 打包发布：
 
 ```bash
-node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.10.3.zip
-skillhub publish ./cookbook-forge --changelog "v1.10.3: 三端节号统一保留 N.0 前缀（LaTeX 章节内节号偏移、Typst 模板/配置 sectionStart）；图表编号支持尾字母后缀（6-4A 锚点与引用各指各表）；epub-check 按实际产物名 glob *.epub；标题锚点防错位，目录与交叉引用跳转准确"
+node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.11.0.zip
+skillhub publish ./cookbook-forge --changelog "v1.11.0: EPUB 标题层级重做（h1–h4 1.9/1.5/1.22/1.08em，层级化留白与字重，相对单位），配色改为 inherit + 中性半透明灰，深浅色与阅读器反色均可读；EPUB/LaTeX PDF/Typst PDF 统一按书名命名（metadata/outline.md 解析 + 跨平台非法字符清洗），新增 build-book.mjs 统一构建入口"
 ```
 
 ## License

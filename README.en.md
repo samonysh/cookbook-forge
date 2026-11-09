@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.10.3"><img src="https://img.shields.io/badge/version-1.10.3-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.11.0"><img src="https://img.shields.io/badge/version-1.11.0-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -87,7 +87,8 @@ cookbook-forge/
 │   ├── lmdx2typst.mjs                    # LLM-driven MDX -> Typst (ilm template) converter
 │   ├── typst-check.mjs                   # Typst lint + rule fixes + per-chapter parallel probe compiles
 │   ├── typst-fonts-check.mjs             # Typst font availability precheck
-│   ├── lbuild-epub.mjs                   # LLM-driven MDX -> EPUB3 converter
+│   ├── lbuild-epub.mjs                   # LLM-driven MDX -> EPUB3 converter (titled output)
+│   ├── build-book.mjs                    # Unified build: titled EPUB / LaTeX PDF / Typst PDF
 │   ├── epub-check.mjs                    # EPUB lint + per-chapter XML well-formedness + package checks
 │   ├── mdx2book.mjs                      # Deterministic MDX -> Typst/LaTeX/EPUB chapters (explicit figure numbers)
 │   ├── chapter-lint.mjs                  # Chapter structure lint (N.0–N.10, markers, figures, run records)
@@ -150,10 +151,10 @@ Phase 3  Chapter MDX      → one .mdx per chapter: intro / map / theory / pract
 Phase 4  Length calibration → expand by coverage (Recipes / source analysis / lookup tables / appendices); floor 50k CJK (body3; tables at 1/2), no per-chapter budget
 Phase 5  Format conversion (sub-agent checks & fixes after each format)
   5a.  MDX               (default)
-  5b.  ElegantBook       -> xelatex (two passes) -> PDF
+  5b.  ElegantBook       -> xelatex (two passes) -> <book-title>.pdf
   5c.  Nextra site       -> npm run build + Docker verification
-  5d.  EPUB              -> font subsetting + CSS rewrite + epub-zip.mjs packaging
-  5e.  Typst             -> ilm template + typst compile -> PDF
+  5d.  EPUB              -> heading hierarchy CSS + font subsetting + epub-zip.mjs -> <book-title>.epub
+  5e.  Typst             -> ilm template + typst compile -> <book-title>.pdf
 Phase 6  Delivery         → bilingual README + links + statistics report
 ```
 
@@ -192,10 +193,10 @@ Before delivery:
 - [ ] Cross-chapter references are clickable links
 - [ ] Whole book `body3` ≥50k CJK (prose only: code blocks, HTML comments and meta excluded; tables counted at 1/2); total length consistent with module weights, with a stated reason when exceeding the reference band
 - [ ] Cover passes the `latex-check.mjs` gate (presence, 1280×1024, non-blank)
-- [ ] PDF: `latex-check.mjs --fix --compile` exits 0; xelatex builds clean; no Markdown residue
+- [ ] PDF: `latex-check.mjs --fix --compile` exits 0; `build-book.mjs --format=latex` outputs `<book-title>.pdf`; no Markdown residue
 - [ ] Nextra: `npm run build` passes; Docker healthy; `/zh` returns 200
-- [ ] EPUB: `epub-check.mjs --fix` exits 0 (per-chapter XML well-formed + package checks); mimetype first & STORED; fonts subset-embedded; CSS effective
-- [ ] Typst: typst compile zero errors; no Markdown/LaTeX syntax residue; CJK fonts configured; `main.typ` contains `@preview/ilm:<version>` and `#show: ilm.with(...)`, with `--fix` restoration when missing
+- [ ] EPUB: `epub-check.mjs --fix` exits 0 (per-chapter XML well-formed + package checks); output is `<book-title>.epub`; mimetype first & STORED; fonts subset-embedded; heading hierarchy and code/table styles effective
+- [ ] Typst: `typst-check.mjs --fix --compile` exits 0; `build-book.mjs --format=typst` outputs `<book-title>.pdf`; no Markdown/LaTeX syntax residue; CJK fonts configured; `main.typ` contains `@preview/ilm:<version>` and `#show: ilm.with(...)`, with `--fix` restoration when missing
 - [ ] Diagrams: source preserved in diagrams-src/, rendered output in figures/
 - [ ] Build artifacts are not committed: no `*.pdf`, `*.epub`, or `latex/`, `typst/`, `epub/`, `mdx/` build directories in the book repo; releases use tags + Release assets
 
@@ -224,8 +225,8 @@ This Skill directory follows the [SkillHub publishing spec](https://skillhub.cn/
 Build and publish:
 
 ```bash
-node scripts/build-skill.mjs          # -> dist/cookbook-forge-1.10.3.zip
-skillhub publish ./cookbook-forge --changelog "v1.10.3: section numbers keep the N.0 prefix across all three outputs (per-chapter LaTeX section offset; Typst template/config sectionStart); figure/table numbers accept letter suffixes so 6-4A anchors and refs stay unique; epub-check globs the actual *.epub artifact; heading anchors no longer drift, so TOC and cross-reference jumps land on the right page"
+node scripts/build-skill.mjs          # -> dist/cookbook-forge-1.11.0.zip
+skillhub publish ./cookbook-forge --changelog "v1.11.0: rebuilt EPUB heading hierarchy (h1-h4 at 1.9/1.5/1.22/1.08em with leveled whitespace/weights, relative units); colors switched to inherit + neutral translucent gray so light/dark and inverted reader themes stay legible; EPUB/LaTeX PDF/Typst PDF now named after the book title (parsed from metadata/outline.md, cross-platform filename sanitization); added build-book.mjs unified build entry"
 ```
 
 ## License
