@@ -2,7 +2,7 @@
 name: "cookbook-forge"
 slug: "cookbook-forge"
 displayName: "Cookbook Forge"
-version: "1.10.0"
+version: "1.10.1"
 license: "MIT"
 summary: "从多源资料生成深度技术 CookBook / Handbook / Survey，产出 MDX -> ElegantBook PDF、Nextra 网站、优化 EPUB、Typst PDF。"
 description: "Generates deep technical CookBooks, Handbooks, and Surveys from user materials (websites, PDFs, EPUBs, GitHub repos, arxiv papers, docs). Produces MDX chapters first, then ElegantBook LaTeX/PDF, Nextra website, optimized EPUB, and Typst PDF. Invoke when user asks to write a Cookbook, handbook, survey, technical book, or structured long-form documentation for a project/domain."
@@ -311,7 +311,7 @@ references:
 6. **正文不点材料 + 章末参考**：正文不得出现「你提供的文档有偏差」「原文写法有误」这类针对材料来源的表述，也不得引用材料瑕疵展开。每章末尾独立开 `N.10 本章参考`，简短列出本章参考的内容、提供了什么、与本章的关系；不并入 `N.9`。
 7. **源码证据单独标注**：原理线允许、也鼓励摘录关键源代码作为机制证据，用来解释对象结构、调度顺序和不变量；但只摘关键片段，并说明它证明了什么，不整段贴。源码摘录用 `<!-- source: <路径>#L<a>-L<b> | 证明：<结论> -->` + 紧随的代码围栏标注；它不是可运行示例，**不写 `verify: Lx`，也不进入 `metadata/verify/chNN.txt`**，不能冒充验证等级。应用线不得依赖源码摘录，只能引用公开 API 与可观测输出（`result.output`、`usage`、消息序列、异常类型等）。`chapter-lint` 会把带 `source` 标记的块排除在 V1/C1/V4 之外单独计数。
 8. **可读性（W1–W7）**：章首先写读者此刻的具体困境与不解决的代价，第四句才引入核心概念；每个 H2/H3 第一段先交代「什么时候会遇到、不处理会怎样」，再给定义（H3 首段 <60 字视为过渡句，豁免此项）；术语与缩写（MCP、HITL、OTel）首次出现必须带一句白话解释或全称括注（`就是 / 即 / 指的是 / 可以理解为`）；段落首句是 ≤70 字的主题句，不以「因此/所以/但是/此外」直接开头；单句 ≤120 CJK（>180 为 ERROR），≥5 个逗号且 ≥100 字必须拆；禁止「本节将介绍」「众所周知」「随着……发展」这类空转开场；同一章内不得出现两句规范化后完全相同（≥25 字）的句子——插入交接句时要把原开场句合并掉。完整规则、正反例与文献依据见 `references/readability-style-guide.md`；阶段 6 由 `chapter-lint.mjs` 的 W1–W7 复核，误报用 `<!-- lint-ignore: Wx -->` 标注理由；`--strict` 下 W2 升为 ERROR，其余 W 项保持 WARN。
-9. **组织层（O1–O9 / G1–G6）**：一章必须是一条完整的问题链，不是分类目录。`N.0` 用一句可回答的问题立题（不写「本章介绍 X」），并写明本章不解决什么；每个 H2 首句承接上一节（回指结论 / 点出缺口 / 复用术语），末句移交或关闭问题；第一个正文节必须是应用线，每个原理节首段回指应用线里出现过的具体现象；一个 H2 只回答一个问题，H3 ≤6；原理/综合节能指出判断、理由、证据、限定、回应；全章核心术语 ≤5 个、一种叫法、章末复现；`N.8–N.9` 必须回到 `N.0` 的问题并写「原来以为 X，现在知道 Y」，回收段单独成段、放在双线索引之前。**章末钩子是硬规则**：最后两节不首次引入术语（加粗概念、新缩写、新标签），预告下一章只能回指本章已定义、已给过例子的概念，且不写下一章技术细节。查阅型章节允许 LD/LDR 等结构变体，但 `track`、`body3` 比例、综合段 10%–15%、G1/G2 照旧，比例异常如实报告。完整规则、正反例、材料对照、冲突裁定与 14 章实测校准见 `references/narrative-structure-guide.md`；阶段 6 由 `chapter-lint.mjs` 的 G1–G6 复核（G1 章首无问题句、G2 章末未回收、G3 机制先行/连堆、G4 原理线无证据锚、G5 单节 H3 ≥8、G6 原理节首段缺交接），误报用 `<!-- lint-ignore: Gx -->` 标注理由；`G` 系列恒为 WARN，其中 `G5` 为提示而非限制（阈值固定 8，不收紧到 7），`--no-organization` 可整体关闭。**`G2` 的收束词含裸词「回到」，会被尾节任意一次「回到」误判为已回收；章末回收段必须人工确认。**
+9. **组织层（O1–O9 / G1–G6）**：一章必须是一条完整的问题链，不是分类目录。`N.0` 用一句可回答的问题立题（不写「本章介绍 X」），并写明本章不解决什么；每个 H2 首句承接上一节（回指结论 / 点出缺口 / 复用术语），末句移交或关闭问题；第一个正文节必须是应用线，每个原理节首段回指应用线里出现过的具体现象；一个 H2 只回答一个问题，H3 ≤6；原理/综合节能指出判断、理由、证据、限定、回应；全章核心术语 ≤5 个、一种叫法、章末复现；`N.8–N.9` 必须回到 `N.0` 的问题并写「原来以为 X，现在知道 Y」，回收段单独成段、放在双线索引之前。**章末钩子是硬规则**：最后两节不首次引入术语（加粗概念、新缩写、新标签），预告下一章只能回指本章已定义、已给过例子的概念，且不写下一章技术细节。查阅型章节允许 LD/LDR 等结构变体，但 `track`、`body3` 比例、综合段 10%–15%、G1/G2 照旧，比例异常如实报告。完整规则、正反例、材料对照、冲突裁定与 14 章实测校准见 `references/narrative-structure-guide.md`；阶段 6 由 `chapter-lint.mjs` 的 G1–G6 复核（G1 章首无问题句、G2 章末未回收、G3 机制先行/连堆、G4 原理线无证据锚、G5 单节 H3 ≥8、G6 原理节首段缺交接），误报用 `<!-- lint-ignore: Gx -->` 标注理由；`G` 系列恒为 WARN，其中 `G5` 为提示而非限制（阈值固定 8，不收紧到 7），`--no-organization` 可整体关闭。**`G2` 按结构判定**：回收段必须独立成段、位于双线索引与 `N.10` 之前，且同一段内同时出现「问题复述」与「认识变化」两类线索；尾节里孤立的「回到」不算收束。豁免只有 `<!-- lint-ignore: G2 -->` 与「`N.0` 无问题句（`G1` 已报）」两种。
 
 #### 图表规范
 
@@ -515,7 +515,7 @@ references:
 1. 在 `metadata/word-count.txt` 写入最终统计（body3 口径中文字符、meta、英文词数、章节数、Recipe、表格、代码块、图表数）。
 2. **结构闸门（两份报告）**：
    - `node scripts/ratio-count.mjs --root=<book> --write` 生成的 `metadata/ratio-report.txt`：三分口径字数（tApp / body3 / 含 meta）、实际比例、偏差、超阈值提示、「只有表格 / 成段论述不足」WARN；`ratio` 已回填。
-   - `node scripts/chapter-lint.mjs --root=<book> --strict` 生成的 `metadata/chapter-lint.txt`：V1–V5 + F1/C1/M1/N1/N2 无 ERROR，R1 的 WARN 必须人工复核；W1–W7 与 G1–G6 的 WARN 逐条处理或写 `lint-ignore` 并注明理由（`G2` 章末未回收通常需要整章补一段收束，不宜逐条豁免；`G2` 会被尾节裸词「回到」误判，回收段仍需人工确认）。
+   - `node scripts/chapter-lint.mjs --root=<book> --strict` 生成的 `metadata/chapter-lint.txt`：V1–V5 + F1/C1/M1/N1/N2 无 ERROR，R1 的 WARN 必须人工复核；W1–W7 与 G1–G6 的 WARN 逐条处理或写 `lint-ignore` 并注明理由（`G2` 章末未回收通常需要整章补一段收束，不宜逐条豁免；`G2` 按结构判定，补写时要同时给「回到 N.0 的问题」和「原来以为…现在知道…」两类线索）。
 3. **断言强度校验**：逐章核对正文断言是否超过该代码块的验证等级。L1 只能陈述「导入/语法通过」，L2 只能陈述「跑通」，L3 才能陈述行为结论。`metadata/verify/chNN.txt` 是逐块实测证据。
 4. 在 `metadata/sources.md` 列出所有参考资料。
 5. 在根目录写中英文 README（见下文）。

@@ -24,7 +24,8 @@
  *   W5 长句：单句 >120 字 WARN、>180 字 ERROR；≥5 逗号且 ≥100 字判「一逗到底」
  *   W6 小节首段是否以「这/该/此/其/它」开头且标题无先行词
  *   G1 N.0 是否有可回答的问题句
- *   G2 章末两节是否回收了 N.0 的问题（共享实词 <2 即断链）
+ *   G2 章末两节是否有结构合格的回收段：独立成段、位于双线索引与 N.10 之前、同段内同时含
+ *      「问题复述」与「认识变化」两类线索；另查回收段与 N.0 问题句的共享实词 <2
  *   G3 首个正文节是否原理线；是否连续 ≥3 个原理节
  *   G4 全章原理节是否 0 代码/图/表/源码证据锚
  *   G5 单个 H2 下 H3 是否 ≥8（提示项：提示复核单弧，不强制拆节，阈值不收紧）
@@ -34,8 +35,8 @@
  *   - 段落 <60 CJK 不查 W4；H3 首段 <60 CJK 不查 W2，其余 H3 不因父 H2 有动机而豁免
  *   - 缩写跳过行内代码、通用缩写白名单与 L1/I3 这类等级编号
  *   - `<!-- lint-ignore: W2 -->` 可豁免下一个小节/段落，多个代码用逗号分隔
- *   - `--no-readability` 整体关闭 W1–W6（历史书稿迁移用）
- *   - `--no-organization` 整体关闭 G1–G5（G 系列恒为 WARN，不随 --strict 升级）
+ *   - `--no-readability` 整体关闭 W1–W7（历史书稿迁移用）
+ *   - `--no-organization` 整体关闭 G1–G6（G 系列恒为 WARN，不随 --strict 升级）
  */
 
 import { promises as fs } from "node:fs";
@@ -531,8 +532,15 @@ function checkReadability(lines, label, add) {
 
 const META_TITLE_RE = /本章参考|本章地图|阅读路线|本章问题|本章位置|本章目标/;
 const N0_TITLE_RE = /(^|\s)(\d+\.)?0(\s|$)|本章位置|本章问题|阅读路线|本章地图/;
-// 章末「收束句」的可观测代理：回到问题、说明认识变化、或明确小结。
-const CLOSURE_RE = /(回到|本章开头|开头的问题|一开始|最初|现在可以(?:给出)?回答|现在知道|原来以?为|不再是.{0,24}而是|综上|小结|本章回答)/;
+// 章末回收段的结构判定（替代裸词表）：
+//   1) 必须是章末两节内的独立段落（空行分隔，非列表/表格/标题/引用/callout/代码）；
+//   2) 必须位于双线索引与 N.10 之前；
+//   3) 同段内同时出现「问题复述」与「认识变化」两类线索，单个词不算。
+const PROBLEM_RECALL_RE = /回到\s*\d+\.0|回到第?\s*\d+\s*章|(?:第?\s*\d+\.0|章首|本章开头|开头|最初)的?(?:那个|三个)?问题/;
+const CHANGE_RE =
+  /原来(?:以为|觉得|认为|想)|此前(?:以为|认为)|最初(?:以为|认为)|现在(?:才)?(?:知道|明白|清楚)|现在可以(?:给出)?(?:完整)?回答|不再是[^。]{0,40}而是/;
+const INDEX_LINE_RE = /^\s*(?:[-*]\s+\*\*(?:应用线|原理线|综合段)|[^\n]{0,16}双线索引[：:])/;
+
 const STOP_CHARS = new Set(
   "的了吗呢吧啊与和或是在有把被对于从到会能要可就让给这那哪些什么怎样如何一个也都而其为所以因此如果但是然后".split(""),
 );
@@ -612,16 +620,48 @@ function checkOrganization(lines, label, add) {
   // ---- G2 章末未回收章首问题 ----
   if (question) {
     const tail = contentH2.slice(-2);
+    const tailStart = Math.min(...tail.map((s) => s.lineNo));
+    const lastSec = tail[tail.length - 1];
+    const tailEnd = sectionRange(lines, sections, sections.indexOf(lastSec)).length + lastSec.lineNo - 1;
+    const tailLines = lines.slice(tailStart - 1, tailEnd);
+    // 回收段必须位于双线索引之前；索引之后的内容（索引、预告）不算。
+    const indexAt = tailLines.findIndex((l) => INDEX_LINE_RE.test(l));
+    const limit = indexAt >= 0 ? indexAt : tailLines.length;
+    // 按空行切独立段落；列表、表格、标题、引用、callout、代码都不算回收段。
+    const blocks = [];
+    let cur = null;
+    for (let i = 0; i < limit; i++) {
+      const l = tailLines[i];
+      if (!l.trim()) {
+        cur = null;
+        continue;
+      }
+      if (cur) cur.text += "\n" + l;
+      else {
+        cur = { text: l };
+        blocks.push(cur);
+      }
+    }
+    const closure = blocks.find((b) => {
+      const t = b.text.trim();
+      if (/^(?:[-*|>#<!`]|<div|<\/div)|\*\*表\s|\*表\s/.test(t)) return false;
+      return PROBLEM_RECALL_RE.test(t) && CHANGE_RE.test(t);
+    });
     const tailText = tail.map((s) => sectionRange(lines, sections, sections.indexOf(s)).join("\n")).join("\n");
     const qGrams = cjkBigrams(question);
     const tGrams = cjkBigrams(tailText);
     let shared = 0;
     for (const g of qGrams) if (tGrams.has(g)) shared++;
-    const hasClosure = CLOSURE_RE.test(tailText);
     const ignored = tail.some((s) => s.ignore.has("G2"));
-    if ((shared < 2 || !hasClosure) && !ignored) {
-      const why = shared < 2 ? `只有 ${shared} 个共享实词` : "没有「回到问题 / 认识变化」的收束句";
-      add(label, "WARN", "G2", `章末两节${why}，未回收 N.0 的问题；请复述问题并写「原来以为…现在知道…」`);
+    if (!closure && !ignored) {
+      add(
+        label,
+        "WARN",
+        "G2",
+        "章末两节没有独立成段的回收段：需同时含「回到 N.0 的问题」与「原来以为…现在知道…」，且位于双线索引之前",
+      );
+    } else if (closure && shared < 2 && !ignored) {
+      add(label, "WARN", "G2", `回收段只有 ${shared} 个共享实词，未真正复述 N.0 的问题`);
     }
   }
 
