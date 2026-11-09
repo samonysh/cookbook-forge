@@ -64,7 +64,7 @@ fork again
   :5d. EPUB;
   note right
     字体子集化+CSS重写
-    +Python 打包
+    +Node 打包
   end note
 end fork
 :阶段6 最终交付;

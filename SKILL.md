@@ -484,7 +484,7 @@ references:
 2. 使用 `scripts/lbuild-epub.mjs` 组装 EPUB3 结构。
 3. CSS 样式（白底黑字、中文字体、代码块 tcolorbox 风格、四色 callout）。
 4. 字体子集化嵌入（LXGW WenKai -> WOFF2）。
-5. Python zipfile 打包（mimetype STORED 优先）。
+5. `scripts/epub-zip.mjs` 打包（Node 内置 zlib，零依赖；mimetype STORED 且为第一）。
 6. 检查与修复循环（check ⇄ fix，≤3 轮）：`node scripts/epub-check.mjs --project epub --fix`——每章 XML 良构校验（标签配对/未转义 `&`/裸 `<`，阅读器能否打开的硬闸门）+ 安全规则自动修复（`className`->`class`、裸 `&`->`&amp;`）+ 包结构检查（manifest/spine/nav/mimetype STORED）；规则修不掉的按章交给子 agent 对照 MDX 原文修，复查 `--only <slug>`；全部通过后重跑 `lbuild-epub.mjs` 重新打包。
 7. **质量检查**：`epub-check.mjs --fix` 退出码 0、XHTML 全部良构、所有图片/字体/章节在 manifest 中、mimetype 第一且 STORED；修复发现的问题后重新打包验证。
 
@@ -585,7 +585,7 @@ references:
 | Docker 构建后容器秒挂 | `next.config.mjs` 未设 `output: 'standalone'` | 开启 standalone；Dockerfile COPY public/ |
 | EPUB 文字变白看不见 | 阅读器误触发 dark scheme | 强制白底黑字 `!important`；删掉 dark media 块 |
 | EPUB 嵌入字体让书变 30MB | 用了完整 TTF | fontTools 子集化转 WOFF2，单字体 ~300KB |
-| EPUB 打包后打不开 | mimetype 不是第一/被压缩 | 必须 Python zipfile，mimetype STORED 优先写入 |
+| EPUB 打包后打不开 | mimetype 不是第一/被压缩 | 必须用 `scripts/epub-zip.mjs`（Node 内置 zlib，零依赖），mimetype STORED 且为第一 |
 | PDF 出现 `\| --- \|` Markdown 表格 | 未转 LaTeX 表格 | mdx2tex 脚本必须把 GFM 表格转为 booktabs/tabularx |
 | PDF 封面缺失/尺寸错/空白 | 未生成封面，或图片近乎纯色 | `latex-check.mjs` 会报 `cover-missing` / `cover-size` / `cover-blank`；按「封面规范」重画 1280×1024 PNG |
 | 跨章引用"第 N 章"编号错乱 | reading order ≠ 文件名 | 跑 renumber-content.mjs 链接化 |
@@ -634,19 +634,19 @@ references:
 
 ---
 
-## 实测基线（一本库框架类样书，2026-11-08）
+## 实测基线（一本库框架类样书，2026-11-09）
 
 | 指标 | 实测值 | 说明 |
 |---|---|---|
 | 章节 | 约 14 章 | 由 A0 判定 + A2 spine 决定，不是固定 15 章模板；此处只给量级，不列可反查目录 |
-| 双线合计 tApp | 67,024 CJK | 应用 36,695 : 原理 30,330 ≈ 55:45 |
-| 全书正文 body3 | 76,388 CJK | 综合段 9,364，占正文 12.3%；表格按 1/2 折算后仍 ≥5 万 |
+| 双线合计 tApp | 70,882 CJK | 应用 38,103 : 原理 32,780 ≈ 53.8:46.2 |
+| 全书正文 body3 | 81,944 CJK | 综合段 11,062，占正文 13.5%；表格按 1/2 折算后仍 ≥5 万 |
 | meta | 7,963 CJK | 章首等，不计入正文与比例 |
 | 图 | 36 张正文图 + 1 张封面 | 每章 ≥2，产物、正文引用、图题齐全 |
 | 可运行代码块 | 80 个 | 全部带 L1/L2/L3 标记与 `metadata/verify/` 实测记录 |
 | 三链 | LaTeX / Typst / EPUB 各 14/14 通过 | 零编译错误，封面/目录/页码衔接正常 |
 
-> 这组数字是可复查的验收基线，不是「建议这样做」的口号。规则是否有效，用它们对照：图数、代码块数、三链通过率都能当场复算。样书只以「一本库框架类样书」指代，不写书名、作者、仓库路径或可反查的目录结构。本轮把 3 处「表格替代论述」小节补成段论述（+1,319 字），body3 由 75,069 → 76,388，综合段占比 10.7% → 12.3%；其中 3 章综合段落到 16.0%–22.6%，人工复核为因果/取舍/失败模式而非复述，按 6.6.4 保留并记录，没有为压比例删字。
+> 这组数字是可复查的验收基线，不是「建议这样做」的口号。规则是否有效，用它们对照：图数、代码块数、三链通过率都能当场复算。样书只以「一本库框架类样书」指代，不写书名、作者、仓库路径或可反查的目录结构。本轮为 3 章补写章末回收段共 516 字，body3 由 81,428 → 81,944，三章综合段占比 9.5% / 10.7% / 10.0% → 12.4% / 13.2% / 12.2%；含回收段章节按 10%–18% 判定（下限 10% 不变），全书 14 章均无越界，16.8% 与 15.8% 两章按结构副作用保留，未删字压比例。
 
 ---
 
@@ -666,7 +666,7 @@ references:
 8. 生成 mdx/_meta.ts
 9a. [可选] **LLM 驱动** MDX -> ElegantBook LaTeX（scripts/lmdx2tex.mjs + Task 子 agent 逐章转换），xelatex 两遍编译出 PDF。详见 references/stage-5b-latex.md
 9b. [可选] 初始化 Nextra 站点，拷贝 mdx，渲染图表，npm run build + Docker 验证。详见 references/stage-5c-nextra.md
-9c. [可选] **LLM 驱动** MDX -> EPUB（scripts/lbuild-epub.mjs + Task 子 agent 逐章转换），子集化字体，Python 打包，自检。详见 references/stage-5d-epub.md
+9c. [可选] **LLM 驱动** MDX -> EPUB（scripts/lbuild-epub.mjs + Task 子 agent 逐章转换），子集化字体，`scripts/epub-zip.mjs` 打包，自检。详见 references/stage-5d-epub.md
 9d. [可选] **LLM 驱动** MDX -> Typst（scripts/lmdx2typst.mjs + Task 子 agent 逐章转换），typst compile 出 PDF。详见 references/stage-5e-typst.md
 10. 写中英文 README + DEPLOY.md（若有 Nextra）
 11. 清理中间目录，输出最终交付链接 + 统计报告
@@ -697,7 +697,7 @@ references:
 - 不要跳过"大纲与用户对齐"直接开写。
 - 不要忽略用户提供的任何资料（无法访问需明确说明）。
 - 不要生成空话/凑字数段落；扩写必须是源码/Recipe/速查表。
-- 不要用 PowerShell `Compress-Archive` 打包 EPUB（必须 Python zipfile）。
+- 不要用 PowerShell `Compress-Archive` 或 Python zipfile 手工打包 EPUB（必须用 `scripts/epub-zip.mjs`，保证 mimetype STORED 且为第一）。
 - 不要在 EPUB 里写复杂 flex/grid。
 - 不要在 PDF 中保留 Markdown 表格/围栏源码。
 - 不要使用 plantuml skill 自带 PS1 脚本（GBK locale 会失败），直接 `docker run plantuml/plantuml:latest`。

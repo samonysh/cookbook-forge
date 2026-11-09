@@ -7,8 +7,22 @@
   "scripts": {
     "mdx2book": "node scripts/mdx2book.mjs",
     "render-figures": "node scripts/render-figures.mjs",
+    "render-diagrams": "node scripts/render-diagrams.mjs",
     "chapter-lint": "node scripts/chapter-lint.mjs",
-    "ratio-count": "node scripts/ratio-count.mjs"
+    "ratio-count": "node scripts/ratio-count.mjs",
+    "word-count": "node scripts/word-count.mjs",
+    "lmdx2tex": "node scripts/lmdx2tex.mjs",
+    "lmdx2typst": "node scripts/lmdx2typst.mjs",
+    "lbuild-epub": "node scripts/lbuild-epub.mjs",
+    "latex-check": "node scripts/latex-check.mjs",
+    "typst-check": "node scripts/typst-check.mjs",
+    "epub-check": "node scripts/epub-check.mjs",
+    "epub-zip": "node scripts/epub-zip.mjs",
+    "subset-fonts": "node scripts/subset-fonts.mjs",
+    "typst-fonts-check": "node scripts/typst-fonts-check.mjs",
+    "kroki-render": "node scripts/kroki-render.mjs",
+    "optimize-formula-images": "node scripts/optimize-formula-images.mjs",
+    "build-skill": "node scripts/build-skill.mjs"
   },
   "dependencies": {
     "jszip": "^3.10.1"

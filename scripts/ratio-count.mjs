@@ -7,6 +7,7 @@
  *
  * 用法：
  *   node scripts/ratio-count.mjs                      # 只检查，写 metadata/ratio-report.txt
+ *   node scripts/ratio-count.mjs --root=<book>        # 指定书目录（只认等号写法）
  *   node scripts/ratio-count.mjs --write              # 同时把实测比例写回各章 frontmatter 的 ratio
  *   node scripts/ratio-count.mjs --strict             # 有 ERROR 时退出码 1
  *   node scripts/ratio-count.mjs --threshold=8        # 自定义偏差阈值（百分点，默认 10）
@@ -29,6 +30,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { parseFrontmatter } from "./lib/mdx-utils.mjs";
 import { splitTrackedSections, applySectionStats } from "./lib/word-caliber.mjs";
+import { resolveRoot } from "./lib/cli-args.mjs";
 
 // ---------- 参数 ----------
 const argv = process.argv.slice(2);
@@ -37,7 +39,7 @@ const opt = (name, fallback) => {
   return hit ? hit.slice(name.length + 3) : fallback;
 };
 const flag = (name) => argv.includes(`--${name}`);
-const ROOT = path.resolve(opt("root", process.cwd()));
+const ROOT = path.resolve(resolveRoot(argv, "ratio-count.mjs") ?? process.cwd());
 const MDX_DIR = path.resolve(ROOT, opt("mdx", "mdx"));
 const TARGETS_FILE = path.resolve(ROOT, opt("targets", "metadata/analysis/04-dual-track.md"));
 const OUTLINE_FILE = path.resolve(ROOT, opt("outline", "metadata/outline.md"));
@@ -350,8 +352,8 @@ out.push(`正文下限: body3 ≥ ${MIN_BODY} 字（最低下限，不是目标�
 out.push(`目标来源: ${targets.source.length ? targets.source.join(" + ") : "未找到目标文件"}`);
 out.push(`偏差阈值: ${THRESHOLD}pp；综合段区间: ${SYNTH_MIN}%–${SYNTH_MAX}%（含章末回收段的章节上限放宽到 ${SYNTH_MAX_CLOSURE}%，下限 ${SYNTH_MIN}% 不变）`);
 out.push("");
-out.push("| 章 | 模块 | 应用 | 原理 | 综合 | meta | 表格折算 | 实测比例 | 目标 | 偏差(pp) | 状态 |");
-out.push("|---|---|---|---|---|---|---|---|---|---|---|");
+out.push("| 章 | 模块 | 应用 | 原理 | 综合 | 综合占比 | meta | 表格折算 | 实测比例 | 目标 | 偏差(pp) | 状态 |");
+out.push("|---|---|---|---|---|---|---|---|---|---|---|---|");
 
 const total = { app: 0, principle: 0, synthesis: 0, meta: 0, tableCJK: 0 };
 let errorCount = 0;
@@ -369,7 +371,8 @@ for (const r of results) {
   warnCount += warns;
   const status = errs ? `ERROR×${errs}` : warns ? `WARN×${warns}` : "OK";
   out.push(
-    `| ch${String(r.chapter).padStart(2, "0")} | ${r.moduleId} | ${Math.round(r.sums.app)} | ${Math.round(r.sums.principle)} | ${Math.round(r.sums.synthesis)} | ${Math.round(r.sums.meta)} | ${Math.round(r.tableCJK * 0.5)} | ` +
+    `| ch${String(r.chapter).padStart(2, "0")} | ${r.moduleId} | ${Math.round(r.sums.app)} | ${Math.round(r.sums.principle)} | ${Math.round(r.sums.synthesis)} | ` +
+      `${Number.isNaN(r.synthShare) ? "—" : r.synthShare.toFixed(1) + "%"} | ${Math.round(r.sums.meta)} | ${Math.round(r.tableCJK * 0.5)} | ` +
       `${Number.isNaN(r.measuredApp) ? "—" : r.measuredApp.toFixed(1) + "%"} | ` +
       `${r.target == null ? "—" : r.target.toFixed(0) + "%"} | ` +
       `${Number.isNaN(r.dev) ? "—" : (r.dev > 0 ? "+" : "") + r.dev.toFixed(1)} | ${status} |`,
@@ -377,7 +380,7 @@ for (const r of results) {
 }
 
 out.push("");
-out.push("> 应用/原理/综合/meta 各列均已含表内 CJK 的 1/2 折算；「表格折算」列是其中来自表格的部分，仅供核对，不要与前三列重复相加。逐章与全书各自四舍五入，纵向相加可能有 ±1 误差。");
+out.push("> 应用/原理/综合/meta 各列均已含表内 CJK 的 1/2 折算；「综合占比」= 综合 ÷ body3，「表格折算」列是其中来自表格的部分，仅供核对，不要与前三列重复相加。逐章与全书各自四舍五入，纵向相加可能有 ±1 误差。");
 out.push("> 章末回收段属于综合层，会结构性推高综合段占比，不是内容失衡。因此含回收段的章节上限按 " + SYNTH_MAX_CLOSURE + "% 判定，下限 " + SYNTH_MIN + "% 不变；**禁止为压回 " + SYNTH_MAX + "% 而删减回收段内容或挪走机制解释**。");
 
 const closureList = results.filter((r) => r.hasClosure).map((r) => `ch${String(r.chapter).padStart(2, "0")}`);

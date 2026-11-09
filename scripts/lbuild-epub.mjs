@@ -3,7 +3,7 @@
 //
 // LLM-driven MDX → EPUB3 转换器。
 // 核心思路：逐个读取 mdx/*.mdx 文件，通过 LLM 子 agent 智能转换为 XHTML 章节，
-// 然后组装 EPUB3 包（OPF/NCX/NAV/CSS/Fonts），最后用 Python zipfile 打包为合规 EPUB。
+// 然后组装 EPUB3 包（OPF/NCX/NAV/CSS/Fonts），最后用 scripts/epub-zip.mjs（Node 内置 zlib，零依赖）打包为合规 EPUB。
 //
 // 用法（CLI）：node lbuild-epub.mjs [--title "书名"]
 //   - 输入：工作目录下 mdx/*.mdx
@@ -12,10 +12,10 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
 import { parseFrontmatter, stripHtmlComments } from "./lib/mdx-utils.mjs";
 import { extractDiagramBlocks, renderAll, replaceBlocks } from "./lib/diagram-renderer.mjs";
 import { lintXhtml } from "./lib/epub-lint.mjs";
+import { buildEpub } from "./epub-zip.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -448,51 +448,13 @@ for (const c of chapterFiles) {
   try { await fs.unlink(pf); } catch {}
 }
 
-// ---------- 打包 EPUB（使用 Python zipfile）----------
+// ---------- 打包 EPUB（scripts/epub-zip.mjs，Node 零依赖）----------
 console.log("\n━━━ 打包 EPUB ━━━");
 
 const epubOut = path.join(outDir, "book.epub");
-const buildScript = `
-import os, zipfile
-from pathlib import Path
-
-SRC = Path(r"${buildDir.replace(/\\/g, "\\\\")}")
-OUT = Path(r"${epubOut.replace(/\\/g, "\\\\")}")
-
-if OUT.exists():
-    OUT.unlink()
-
-with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as zf:
-    zi = zipfile.ZipInfo("mimetype")
-    zi.compress_type = zipfile.ZIP_STORED
-    zi.external_attr = 0o644 << 16
-    zf.writestr(zi, "application/epub+zip")
-
-    added = {"mimetype"}
-    for root, _, files in os.walk(SRC):
-        for name in sorted(files):
-            full = Path(root) / name
-            rel = full.relative_to(SRC).as_posix()
-            if rel in added:
-                continue
-            zf.write(full, rel, compress_type=zipfile.ZIP_DEFLATED)
-            added.add(rel)
-
-# 自检
-z = zipfile.ZipFile(OUT)
-assert z.namelist()[0] == "mimetype", "mimetype must be first entry"
-assert z.getinfo("mimetype").compress_type == zipfile.ZIP_STORED
-assert z.read("mimetype") == b"application/epub+zip"
-print(f"EPUB OK: {len(z.namelist())} entries, {OUT.stat().st_size / 1024:.1f} KB")
-`;
-
-const tmpScript = path.join(outDir, "_pack_epub.py");
-await fs.writeFile(tmpScript, buildScript, "utf8");
-try {
-  execSync(`python "${tmpScript}"`, { stdio: "inherit" });
-} finally {
-  try { await fs.unlink(tmpScript); } catch {}
-}
+await buildEpub(buildDir, epubOut);
+const epubKb = ((await fs.stat(epubOut)).size / 1024).toFixed(1);
+console.log(`EPUB OK: ${epubKb} KB → ${epubOut}`);
 
 // ---------- 输出结构化任务清单（供 TRAE agent 编排）----------
 const planPath = path.join(outDir, ".conversion-plan.json");

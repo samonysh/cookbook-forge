@@ -10,7 +10,7 @@
  *
  * 用法：
  *   node scripts/render-figures.mjs                 # 报告写 metadata/figure-report.txt
- *   node scripts/render-figures.mjs --root=<book>   # 指定书目录
+ *   node scripts/render-figures.mjs --root=<book>   # 指定书目录（只认等号写法）
  *   node scripts/render-figures.mjs --strict        # 有 ERROR 时退出码 1
  *   node scripts/render-figures.mjs --no-render     # 只检查，不调用 Python
  */
@@ -19,6 +19,7 @@ import { promises as fs } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRoot } from "./lib/cli-args.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILL_ROOT = path.resolve(__dirname, "..");
@@ -31,7 +32,7 @@ const opt = (name, fallback) => {
 };
 const flag = (name) => argv.includes(`--${name}`);
 
-const ROOT = path.resolve(opt("root", process.cwd()));
+const ROOT = path.resolve(resolveRoot(argv, "render-figures.mjs") ?? process.cwd());
 const MDX_DIR = path.resolve(ROOT, opt("mdx", "mdx"));
 const FIG_DIR = path.resolve(ROOT, "mdx", "public", "figures");
 const SRC_DIR = path.resolve(ROOT, "mdx", "public", "diagrams-src");

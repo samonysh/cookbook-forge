@@ -64,7 +64,7 @@ fork again
   :5d. EPUB;
   note right
     font subsetting+CSS rewrite
-    +Python packaging
+    +Node packaging
   end note
 end fork
 :Phase 6 Delivery;

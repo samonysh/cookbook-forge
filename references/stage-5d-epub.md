@@ -59,9 +59,10 @@ LLM 转换 vs 脚本转换的优势：
 
 ### 6. 打包
 
-用 Python zipfile（**不要用 PowerShell Compress-Archive**），保证：
+用 `scripts/epub-zip.mjs`（Node 内置 zlib，零依赖；**不要用 PowerShell Compress-Archive 或 Python zipfile 手工打包**），保证：
 - `mimetype` 第一个条目且 STORED（不压缩）
 - 其他文件 DEFLATE 压缩
+- 打包后遍历 central directory 二次校验（条目数、mimetype 位置与压缩方式）
 
 **封面（机制不变）**：`lbuild-epub.mjs` 会识别 `figures/cover.(png|jpe?g)`，自动生成 `cover.xhtml`
 作为 spine 首项，并在 `content.opf` 中登记 `properties="cover-image"` 与

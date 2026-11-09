@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.9.0"><img src="https://img.shields.io/badge/version-1.9.0-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.10.2"><img src="https://img.shields.io/badge/version-1.10.2-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -44,7 +44,7 @@ It consolidates the core capabilities of three pre-existing Skills:
 - 📝 MDX as the canonical intermediate format: one `.mdx` per chapter for easy conversion to any downstream format
 - ⚙️ **Two conversion paths**: LLM chapter-by-chapter conversion (three prompts) and deterministic `mdx2book.mjs`; the latter parses block by block, keeps prose verbatim, and uses explicit figure numbering `fig-NN-M` for structurally simple chapters
 - 🧾 **Auditable writing process**: four kinds of HTML annotations (`track` / `verify` / `source` / `FIGURE`) stay in MDX and are stripped uniformly at conversion time; `chapter-lint.mjs` validates the N.0–N.10 skeleton, figure slots, verification levels, and per-block run records
-- 📊 **Measured dual-track ratio**: `ratio-count.mjs` counts prose CJK per `track` (code blocks, HTML comments and meta excluded; tables counted at 1/2), writes back to frontmatter, and emits a report; warns when prose <120 chars, or table share >60% with prose <300 chars
+- 📊 **Measured dual-track ratio**: `ratio-count.mjs` counts prose CJK per `track` (code blocks, HTML comments and meta excluded; tables counted at 1/2), writes back to frontmatter with `--write`, and emits a report; warns when prose <120 chars, or table share >60% with prose <300 chars; synthesis is checked against 10%–15%, raised to 18% for chapters with a closing recap section (floor stays 10%)
 - 📐 **Length driven by coverage**: after A0/A1 the total is derived from module count × recursion depth × concept density; floor is 50k CJK (`body3`: code blocks, HTML comments and meta excluded; tables counted at 1/2), no fixed per-chapter budget, chapter length follows module weight
 - 🖼 **Cover gate**: when no artwork exists, draw a whole-book architecture diagram (spine / module groups / dependency direction) with diagram-design; `latex-check.mjs` verifies presence, 1280×1024 size, and non-blank pixels
 - 🎨 Rich figures: HTML sources (exported to SVG via `assets/diagram-style/`) / mermaid / plantuml / drawio / excalidraw / chart, chosen based on user preference
@@ -79,7 +79,9 @@ cookbook-forge/
 │   │   ├── latex-lint.mjs                # LaTeX lint/fix rules
 │   │   ├── epub-lint.mjs                 # EPUB XHTML lint/fix + XML well-formedness rules
 │   │   ├── typst-lint.mjs                # Typst lint/fix rules
-│   │   └── typst-optimize.mjs            # Deterministic Typst optimization (label injection, ref rewriting)
+│   │   ├── typst-optimize.mjs            # Deterministic Typst optimization (label injection, ref rewriting)
+│   │   ├── word-caliber.mjs              # Prose caliber (CJK / tables at 1/2 / meta excluded), shared by word-count and ratio-count
+│   │   └── cli-args.mjs                  # CLI argument conventions (--root requires the equals form)
 │   ├── lmdx2tex.mjs                      # LLM-driven MDX -> ElegantBook LaTeX converter
 │   ├── latex-check.mjs                   # LaTeX lint + rule fixes + per-chapter parallel probe compiles
 │   ├── lmdx2typst.mjs                    # LLM-driven MDX -> Typst (ilm template) converter
@@ -102,6 +104,8 @@ cookbook-forge/
 │   ├── style-guide-oreilly.md            # O'Reilly CookBook style reference
 │   ├── style-guide-springer.md           # Springer Handbook style reference
 │   ├── technical-book-analysis-methodology.md # Pre-writing analysis methodology (define / decompose / map / deepen / weave)
+│   ├── readability-style-guide.md        # Readability rules (W1–W7)
+│   ├── narrative-structure-guide.md      # Organization-layer rules (O1–O9 / G1–G6)
 │   ├── stage-5a-mdx.md                   # Stage 5a: MDX output sub-process
 │   ├── stage-5b-latex.md                 # Stage 5b: LaTeX + PDF sub-process
 │   ├── stage-5c-nextra.md                # Stage 5c: Nextra site sub-process
@@ -148,7 +152,7 @@ Phase 5  Format conversion (sub-agent checks & fixes after each format)
   5a.  MDX               (default)
   5b.  ElegantBook       -> xelatex (two passes) -> PDF
   5c.  Nextra site       -> npm run build + Docker verification
-  5d.  EPUB              -> font subsetting + CSS rewrite + Python packaging
+  5d.  EPUB              -> font subsetting + CSS rewrite + epub-zip.mjs packaging
   5e.  Typst             -> ilm template + typst compile -> PDF
 Phase 6  Delivery         → bilingual README + links + statistics report
 ```
@@ -199,20 +203,29 @@ Before delivery:
 
 This Skill repository only contains the Skill itself (`scripts/`, `assets/`, `references/` and docs). PDF, EPUB, and Typst/LaTeX/EPUB build directories (`latex/`, `typst/`, `epub/`, `mdx/`) are never committed; each book project excludes them and `*.pdf` / `*.epub` in its own `.gitignore`. Publish binaries via git tags + GitHub Release assets. Before committing, run `git log -p --all` (project/module/user names must return 0 hits) and `git ls-files` (no artifacts). If history already contains them, back up with `git bundle` outside the repo, then rewrite history and push with `--force-with-lease`.
 
-## Publishing to SkillHub
+## Install & Release
+
+### Install via skills.sh
+
+```bash
+npx skills add samonysh/cookbook-forge
+```
+
+### Publish to SkillHub
 
 This Skill directory follows the [SkillHub publishing spec](https://skillhub.cn/tutorials#publish-manage-skill):
 
 - ✅ Root-level `SKILL.md` with frontmatter (`name`, `slug`, `displayName`, `version`, `license`, `summary`, `description`, `tags`)
 - ✅ `scripts/` executable scripts (`.mjs`)
-- ✅ `references/` lazily-loaded reference docs (style guides)
+- ✅ `references/` lazily-loaded reference docs (style guides + stage 5 sub-processes)
 - ✅ `assets/` templates and resources (logo, diagrams, MDX template, Nextra scaffold, CSS)
 - ✅ Bilingual `README.md` / `README.en.md`
 
-Publish via CLI:
+Build and publish:
 
 ```bash
-skillhub publish ./cookbook-forge --changelog "Initial release"
+node scripts/build-skill.mjs          # -> dist/cookbook-forge-1.10.2.zip
+skillhub publish ./cookbook-forge --changelog "v1.10.2: synthesis upper bound raised to 18% for chapters with a closing recap (floor stays 10%); G2 rewritten as a structural check; W7/G6 added; bare --root now fails loudly; references registration and version numbers aligned"
 ```
 
 ## License

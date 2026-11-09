@@ -8,7 +8,7 @@
  * 用法：
  *   node scripts/chapter-lint.mjs                 # 报告写 metadata/chapter-lint.txt
  *   node scripts/chapter-lint.mjs --strict        # 有 ERROR 时退出码 1
- *   node scripts/chapter-lint.mjs --root=<book>   # 指定书目录（默认 cwd）
+ *   node scripts/chapter-lint.mjs --root=<book>   # 指定书目录（默认 cwd；只认等号写法）
  *
  * 检查项：
  *   V1 每个 ```python 代码块前 3 行内必须有 `<!-- verify: L1|L2|L3 -->`
@@ -42,13 +42,14 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { parseFrontmatter } from "./lib/mdx-utils.mjs";
+import { resolveRoot } from "./lib/cli-args.mjs";
 
 const argv = process.argv.slice(2);
 const opt = (name, fallback) => {
   const hit = argv.find((a) => a.startsWith(`--${name}=`));
   return hit ? hit.slice(name.length + 3) : fallback;
 };
-const ROOT = path.resolve(opt("root", process.cwd()));
+const ROOT = path.resolve(resolveRoot(argv, "chapter-lint.mjs") ?? process.cwd());
 const MDX_DIR = path.resolve(ROOT, opt("mdx", "mdx"));
 const VERIFY_DIR = path.resolve(ROOT, opt("verify-dir", "metadata/verify"));
 const FIGURE_DIR = path.resolve(ROOT, "mdx", "public", "figures");
@@ -904,9 +905,9 @@ for (const f of files) {
     add(label, "ERROR", "N2", `标题残留占位章号「${ph[0].trim()}」，定稿前必须替换为真实章号`);
   }
 
-  // ---- W1–W6 可读性（详见 references/readability-style-guide.md）----
+  // ---- W1–W7 可读性（详见 references/readability-style-guide.md）----
   if (!NO_READABILITY) checkReadability(lines, label, add);
-  // ---- G1–G5 组织层（详见 references/narrative-structure-guide.md）----
+  // ---- G1–G6 组织层（详见 references/narrative-structure-guide.md）----
   if (!NO_ORGANIZATION) checkOrganization(lines, label, add);
 
   summary.push({

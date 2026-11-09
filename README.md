@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.9.0"><img src="https://img.shields.io/badge/version-1.9.0-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.10.2"><img src="https://img.shields.io/badge/version-1.10.2-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -44,7 +44,7 @@
 - 📝 **MDX 为权威中间格式**：每章一个 `.mdx`，便于后续多格式转换
 - ⚙️ **双转换路径**：LLM 逐章转换（三个 Prompt）与 `mdx2book.mjs` 确定性转换并存；后者按块解析、正文逐字保留，图表使用显式编号 `fig-NN-M`，适合结构固定的章节
 - 🧾 **写作过程可审计**：四类 HTML 注解（`track` / `verify` / `source` / `FIGURE`）在 MDX 内保留、转换时统一剥离；`chapter-lint.mjs` 校验 N.0–N.10 骨架、图位、验证等级与逐块实测记录
-- 📊 **双线比例实测**：`ratio-count.mjs` 按 `track` 统计正文 CJK（剔除代码块、HTML 注释与 meta；表格内 CJK 按 1/2 计数），回填 frontmatter 并输出报告；对「有表但成段论述 <120 字」或「表格折算占比 >60% 且成段论述 <300 字」的小节报 WARN
+- 📊 **双线比例实测**：`ratio-count.mjs` 按 `track` 统计正文 CJK（剔除代码块、HTML 注释与 meta；表格内 CJK 按 1/2 计数），`--write` 回填 frontmatter 并输出报告；对「有表但成段论述 <120 字」或「表格折算占比 >60% 且成段论述 <300 字」的小节报 WARN；综合段按 10%–15% 判定，含章末回收段的章节上限放宽到 18%（下限 10% 不变）
 - 📐 **篇幅按覆盖度定**：A0/A1 后按模块数 × 递归深度 × 概念密度定全书总量；下限 5 万 CJK（`body3` 口径：不含 meta，表格按 1/2 计数），不设逐章固定预算，章长按模块权重分配
 - 🖼 **封面闸门**：无素材时用 diagram-design 画全书架构图（spine / 模块分群 / 依赖方向）；`latex-check.mjs` 校验封面存在、1280×1024、非空白
 - 🎨 **丰富图表**：HTML 图源（`assets/diagram-style/` 导出 SVG）/ mermaid / plantuml / drawio / excalidraw / chart，按用户偏好选用
@@ -79,7 +79,9 @@ cookbook-forge/
 │   │   ├── latex-lint.mjs                # LaTeX lint/fix 规则库
 │   │   ├── epub-lint.mjs                 # EPUB XHTML lint/fix + XML 良构校验规则库
 │   │   ├── typst-lint.mjs                # Typst lint/fix 规则库
-│   │   └── typst-optimize.mjs            # Typst 确定性优化（label 注入、引用改写等）
+│   │   ├── typst-optimize.mjs            # Typst 确定性优化（label 注入、引用改写等）
+│   │   ├── word-caliber.mjs              # 正文口径（CJK / 表格 ×0.5 / meta 剔除），word-count 与 ratio-count 共用
+│   │   └── cli-args.mjs                  # CLI 参数约定（--root 只认等号写法）
 │   ├── lmdx2tex.mjs                      # LLM 驱动 MDX -> ElegantBook LaTeX 转换
 │   ├── latex-check.mjs                   # LaTeX 静态 lint + 规则修复 + 每章并行 probe 编译
 │   ├── lmdx2typst.mjs                    # LLM 驱动 MDX -> Typst（ilm 模板）转换
@@ -102,6 +104,8 @@ cookbook-forge/
 │   ├── style-guide-oreilly.md            # O'Reilly CookBook 写作风格参考
 │   ├── style-guide-springer.md           # Springer Handbook 写作风格参考
 │   ├── technical-book-analysis-methodology.md # 前置分析方法论（定·拆·图·深·织）
+│   ├── readability-style-guide.md        # 可读性写作规范（W1–W7）
+│   ├── narrative-structure-guide.md      # 组织层写作规范（O1–O9 / G1–G6）
 │   ├── stage-5a-mdx.md                   # 阶段 5a：MDX 输出子流程
 │   ├── stage-5b-latex.md                 # 阶段 5b：LaTeX + PDF 子流程
 │   ├── stage-5c-nextra.md                # 阶段 5c：Nextra 网站子流程
@@ -148,7 +152,7 @@ cookbook-forge/
   5a.  MDX          （默认）
   5b.  ElegantBook  -> xelatex 两遍编译 -> PDF
   5c.  Nextra 网站  -> npm run build + Docker 验证
-  5d.  EPUB         -> 字体子集化 + CSS 重写 + Python 打包
+  5d.  EPUB         -> 字体子集化 + CSS 重写 + epub-zip.mjs 打包
   5e.  Typst        -> ilm 模板 + typst compile -> PDF
 阶段 6  最终交付     → 中英文 README + 链接 + 统计报告
 ```
@@ -221,8 +225,8 @@ npx skills add samonysh/cookbook-forge
 打包发布：
 
 ```bash
-node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.9.0.zip
-skillhub publish ./cookbook-forge --changelog "v1.9.0: 组织层规范定稿（章末钩子升级为硬规则、查阅型章节允许 LD/LDR 变体且度量不变、G5 明确为提示而非限制、Diátaxis 仅在提纲标注）；样书 11 章补章末回收、15 处术语/缩写补白话解释"
+node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.10.2.zip
+skillhub publish ./cookbook-forge --changelog "v1.10.2: 含章末回收段的章节综合段上限放宽到 18%（下限 10% 不变）；G2 改为结构判定；新增 W7/G6；--root 空格写法显式报错；补齐 references 登记与版本号"
 ```
 
 ## License
