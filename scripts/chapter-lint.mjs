@@ -145,11 +145,11 @@ async function readVerifyRecord(label) {
   }
 }
 
-// ---------------- 可读性检查（W1–W6） ----------------
+// ---------------- 可读性检查（W1–W7） ----------------
 
 const MOTIVE_RE =
   /(问题|症状|失败|报错|错误|异常|超时|延迟|慢|贵|成本|风险|不一致|冲突|一旦|如果|当你|当.{0,14}时|否则|代价|误判|坑|陷阱|为了|需要|不能|必须|约束|边界|规则|为什么|怎样|如何|困扰|麻烦|痛点)/;
-const DEFINITION_RE = /(是指|指的是|定义为|是一种|即为|被称为|称作)/;
+const DEFINITION_RE = /(?<!的)是指|指的是|定义为|是一种|即为|被称为|称作/;
 const CONNECTIVE_RE = /^(因此|所以|但是|然而|此外|同时|另外|而且|并且|于是|这就|这意味着|这表明|这说明)/;
 const GLOSS_RE =
   /(就是|即|指的是|是指|定义为|可以理解为|相当于|好比|通俗|简单说|也就是说|换句话说|（[^）]{1,30}）|\([^)]{1,40}\))/;
@@ -502,10 +502,31 @@ function checkReadability(lines, label, add) {
       }
     }
   }
+
+  // ---- W7 重复句（增量改写时容易把原句留在新交接句后面） ----
+  const sentenceMap = new Map();
+  for (const s of sections) {
+    if (s.track === "meta" || /本章参考|本章地图|阅读路线/.test(s.title)) continue;
+    for (const p of s.paragraphs) {
+      for (const sentence of splitSentences(normalizeProse(p.text))) {
+        const key = sentence.replace(/[\s，。；：！？、,.!?;:]/g, "");
+        if (cjkCount(key) < 25) continue;
+        const rec = sentenceMap.get(key);
+        if (!rec) {
+          sentenceMap.set(key, { lineNo: p.lineNo, count: 1 });
+        } else {
+          rec.count++;
+          if (rec.count === 2 && rec.lineNo !== p.lineNo) {
+            add(label, "WARN", "W7", `第 ${rec.lineNo} 行与第 ${p.lineNo} 行出现重复句（≥25 字），请删除或改写其中一处`);
+          }
+        }
+      }
+    }
+  }
 }
 
 
-// ---------------- 组织层检查（G1–G5） ----------------
+// ---------------- 组织层检查（G1–G6） ----------------
 // 详见 references/narrative-structure-guide.md。只查 H2 层，N.0 / N.10 / meta 轨不参与。
 
 const META_TITLE_RE = /本章参考|本章地图|阅读路线|本章问题|本章位置|本章目标/;
@@ -633,6 +654,21 @@ function checkOrganization(lines, label, add) {
     );
     if (!anchored && !n0.ignore.has("G4")) {
       add(label, "WARN", "G4", `全章 ${principleSections.length} 个原理节没有任何代码/图/表/源码证据锚，属于纯说理`);
+    }
+  }
+
+  // ---- G6 原理节首段缺交接 ----
+  // 只抓「以标识符定义开篇」的典型形态，避免把普通的判断式主题句当成断链。
+  const HANDOFF_RE = /(\d+\.\d+|上一节|前一节|前面|此前|刚才|上一章|第\s*\d+\s*章)/;
+  for (const s of contentH2) {
+    if (s.track !== "principle" || s.ignore.has("G6")) continue;
+    const first = s.firstPara;
+    if (!first || s.listFirst || s.tableFirst) continue;
+    const head = first.text.trim();
+    if (!/^`[^`]+`/.test(head)) continue;
+    const window = head.slice(0, 120);
+    if (!HANDOFF_RE.test(window) && !MOTIVE_RE.test(window)) {
+      add(label, "WARN", "G6", `第 ${first.lineNo} 行原理节「${s.title}」首段直接以概念开篇，未回指上一节的现象或结论`);
     }
   }
 
@@ -861,9 +897,9 @@ report.push("");
 report.push(`合计: ERROR ${errorCount}，WARN ${warnCount}`);
 report.push("");
 
-const wIssues = issues.filter((i) => /^W[1-6]$/.test(i.code));
+const wIssues = issues.filter((i) => /^W[1-7]$/.test(i.code));
 if (wIssues.length) {
-  report.push("## 可读性告警分布（W1–W6）");
+  report.push("## 可读性告警分布（W1–W7）");
   report.push("");
   report.push("| 代码 | ERROR | WARN | 含义 |");
   report.push("|---|---|---|---|");
@@ -874,8 +910,9 @@ if (wIssues.length) {
     W4: "段落主题句弱",
     W5: "长句 / 一逗到底",
     W6: "段首指代悬空",
+    W7: "重复句",
   };
-  for (const code of ["W1", "W2", "W3", "W4", "W5", "W6"]) {
+  for (const code of ["W1", "W2", "W3", "W4", "W5", "W6", "W7"]) {
     const list = wIssues.filter((i) => i.code === code);
     if (!list.length) continue;
     const e = list.filter((i) => i.level === "ERROR").length;
@@ -884,9 +921,9 @@ if (wIssues.length) {
   report.push("");
 }
 
-const gIssues = issues.filter((i) => /^G[1-5]$/.test(i.code));
+const gIssues = issues.filter((i) => /^G[1-6]$/.test(i.code));
 if (gIssues.length) {
-  report.push("## 组织层告警分布（G1–G5）");
+  report.push("## 组织层告警分布（G1–G6）");
   report.push("");
   report.push("| 代码 | ERROR | WARN | 含义 |");
   report.push("|---|---|---|---|");
@@ -896,8 +933,9 @@ if (gIssues.length) {
     G3: "机制先行 / 机制连堆",
     G4: "原理线无证据锚",
     G5: "单节过平（H3 ≥8）",
+    G6: "原理节首段缺交接",
   };
-  for (const code of ["G1", "G2", "G3", "G4", "G5"]) {
+  for (const code of ["G1", "G2", "G3", "G4", "G5", "G6"]) {
     const list = gIssues.filter((i) => i.code === code);
     if (!list.length) continue;
     const e = list.filter((i) => i.level === "ERROR").length;
