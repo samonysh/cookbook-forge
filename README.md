@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.10.2"><img src="https://img.shields.io/badge/version-1.10.2-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.10.3"><img src="https://img.shields.io/badge/version-1.10.3-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -225,8 +225,8 @@ npx skills add samonysh/cookbook-forge
 打包发布：
 
 ```bash
-node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.10.2.zip
-skillhub publish ./cookbook-forge --changelog "v1.10.2: 含章末回收段的章节综合段上限放宽到 18%（下限 10% 不变）；G2 改为结构判定；新增 W7/G6；--root 空格写法显式报错；补齐 references 登记与版本号"
+node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.10.3.zip
+skillhub publish ./cookbook-forge --changelog "v1.10.3: 三端节号统一保留 N.0 前缀（LaTeX 章节内节号偏移、Typst 模板/配置 sectionStart）；图表编号支持尾字母后缀（6-4A 锚点与引用各指各表）；epub-check 按实际产物名 glob *.epub；标题锚点防错位，目录与交叉引用跳转准确"
 ```
 
 ## License

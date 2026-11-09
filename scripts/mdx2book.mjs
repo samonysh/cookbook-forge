@@ -143,15 +143,15 @@ function parseBlocks(body) {
   return blocks;
 }
 
-/** 匹配「图 N-M / 表 N-M」题注行，返回 { num, text }（兼容 **粗体**、*斜体*、纯文本）。 */
+/** 匹配「图 N-M / 表 N-M」题注行，返回 { num, text }（兼容 **粗体**、*斜体*、尾字母编号如 6-4A）。 */
 function parseCaption(text, kind) {
   const t = String(text).trim();
-  const re = new RegExp(`^(\\*\\*|\\*)?\\s*${kind}\\s*(\\d+)\\s*-\\s*(\\d+)\\s*(\\*\\*|\\*)?\\s*[　\\s:：]*(.*)$`, "s");
+  const re = new RegExp(`^(\\*\\*|\\*)?\\s*${kind}\\s*(\\d+)\\s*-\\s*(\\d+)([A-Za-z]?)\\s*(\\*\\*|\\*)?\\s*[　\\s:：]*(.*)$`, "s");
   const m = t.match(re);
   if (!m) return null;
-  let rest = m[5].trim();
+  let rest = m[6].trim();
   if (m[1] === "*" && rest.endsWith("*")) rest = rest.slice(0, -1).trim();
-  return { num: `${m[2]}-${m[3]}`, text: rest };
+  return { num: `${m[2]}-${m[3]}${m[4] || ""}`, text: rest };
 }
 
 /** 把题注行挂到图/表上，并从正文中移除该行。 */
@@ -185,18 +185,21 @@ function figureId(src) {
 }
 
 // ---------- 行内渲染 ----------
-const REF_RE = /([图表])\s*(\d+)\s*-\s*(\d+)/;
+// 图/表编号允许尾字母（如 6-4A），分组与锚点都保留完整编号。
+const REF_RE = /([图表])\s*(\d+)\s*-\s*(\d+)([A-Za-z]?)/;
+const REF_SPLIT_RE = /([图表]\s*\d+\s*-\s*\d+[A-Za-z]?)/;
+const refNum = (m) => `${m[2]}-${m[3]}${m[4] || ""}`;
 
 function escapeTypst(s) {
   return s.replace(/[\\#$@*_\[\]<>`~]/g, (c) => `\\${c}`);
 }
 function inlineTypstPlain(s) {
   return s
-    .split(/([图表]\s*\d+\s*-\s*\d+)/)
+    .split(REF_SPLIT_RE)
     .map((part, idx) => {
       if (idx % 2 === 1) {
         const m = part.match(REF_RE);
-        return `@${m[1] === "图" ? "fig" : "tab"}-${m[2]}-${m[3]}`;
+        return `@${m[1] === "图" ? "fig" : "tab"}-${refNum(m)}`;
       }
       return escapeTypst(part);
     })
@@ -260,12 +263,13 @@ function breakableCode(s) {
 }
 function inlineLatexPlain(s) {
   return s
-    .split(/([图表]\s*\d+\s*-\s*\d+)/)
+    .split(REF_SPLIT_RE)
     .map((part, idx) => {
       if (idx % 2 === 1) {
         const m = part.match(REF_RE);
         const kind = m[1] === "图" ? "fig" : "tab";
-        return `\\hyperlink{${kind}:${m[2]}-${m[3]}}{${m[1]} ${m[2]}-${m[3]}}`;
+        const num = refNum(m);
+        return `\\hyperlink{${kind}:${num}}{${m[1]} ${num}}`;
       }
       return escapeLatexPlain(part);
     })
@@ -330,12 +334,13 @@ function xrefHref(kind, num, currentSlug) {
 }
 function inlineHtmlPlain(s, slug) {
   return s
-    .split(/([图表]\s*\d+\s*-\s*\d+)/)
+    .split(REF_SPLIT_RE)
     .map((part, idx) => {
       if (idx % 2 === 1) {
         const m = part.match(REF_RE);
         const kind = m[1] === "图" ? "fig" : "tab";
-        return `<a class="xref" href="${xrefHref(kind, `${m[2]}-${m[3]}`, slug)}">${m[1]} ${m[2]}-${m[3]}</a>`;
+        const num = refNum(m);
+        return `<a class="xref" href="${xrefHref(kind, num, slug)}">${m[1]} ${num}</a>`;
       }
       return escapeHtml(part);
     })
@@ -580,8 +585,10 @@ const stripChapterPrefix = (t) => t.replace(/^第\s*\d+\s*章[　\s：:]*/, "").
 function wrapTypst(title, body) {
   return `#import "../callout.typ": callout-box\n\n= ${inlineTypst(stripChapterPrefix(title))}\n\n${body}\n`;
 }
-function wrapLatex(title, slug, body) {
-  return `\\chapter{${escapeLatexPlain(stripChapterPrefix(title))}}\n\\label{ch:${slug}}\n\n${body}\n`;
+function wrapLatex(title, slug, body, offsetSections) {
+  // 同 Typst：首个 H2 是 N.0 时把 section 计数器预置为 -1，避免 1.0 → 1.1 的整体偏移。
+  const offset = offsetSections ? `\\setcounter{section}{-1}\n` : "";
+  return `\\chapter{${escapeLatexPlain(stripChapterPrefix(title))}}\n\\label{ch:${slug}}\n${offset}\n${body}\n`;
 }
 function wrapXhtml(title, body) {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -632,6 +639,9 @@ for (const c of chapters) {
   const { body } = parseFrontmatter(c.raw, c.file);
   const blocks = parseBlocks(stripHtmlComments(body));
   attachCaptions(blocks);
+  // 首个小节是「N.0」时，LaTeX/Typst 的自动节号需要从 0 起（见 wrapTypst/wrapLatex）。
+  const firstH2 = blocks.find((b) => b.type === "heading" && b.level === 2);
+  const offsetSections = !!firstH2 && new RegExp(`^${c.chapter}\\.0(?!\\d)`).test(firstH2.text);
   const figs = blocks.filter((b) => b.type === "figure").length;
   const tabs = blocks.filter((b) => b.type === "table").length;
   figures += figs;
@@ -643,7 +653,7 @@ for (const c of chapters) {
   }
   if (doLatex) {
     const ctx = { chapter: c.chapter, tableIndex: 1 };
-    await fs.writeFile(path.join(latexDir, `${c.slug}.tex`), wrapLatex(c.title, c.slug, renderLatex(blocks, ctx)), "utf8");
+    await fs.writeFile(path.join(latexDir, `${c.slug}.tex`), wrapLatex(c.title, c.slug, renderLatex(blocks, ctx), offsetSections), "utf8");
   }
   if (doEpub) {
     const ctx = { chapter: c.chapter, tableIndex: 1, slug: c.slug };

@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.10.2"><img src="https://img.shields.io/badge/version-1.10.2-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.10.3"><img src="https://img.shields.io/badge/version-1.10.3-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -224,8 +224,8 @@ This Skill directory follows the [SkillHub publishing spec](https://skillhub.cn/
 Build and publish:
 
 ```bash
-node scripts/build-skill.mjs          # -> dist/cookbook-forge-1.10.2.zip
-skillhub publish ./cookbook-forge --changelog "v1.10.2: synthesis upper bound raised to 18% for chapters with a closing recap (floor stays 10%); G2 rewritten as a structural check; W7/G6 added; bare --root now fails loudly; references registration and version numbers aligned"
+node scripts/build-skill.mjs          # -> dist/cookbook-forge-1.10.3.zip
+skillhub publish ./cookbook-forge --changelog "v1.10.3: section numbers keep the N.0 prefix across all three outputs (per-chapter LaTeX section offset; Typst template/config sectionStart); figure/table numbers accept letter suffixes so 6-4A anchors and refs stay unique; epub-check globs the actual *.epub artifact; heading anchors no longer drift, so TOC and cross-reference jumps land on the right page"
 ```
 
 ## License

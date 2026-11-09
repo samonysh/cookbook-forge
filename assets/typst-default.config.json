@@ -14,6 +14,7 @@
     "autoNumber": true,
     "level1Pattern": "第 {n} 章",
     "numbering": "1.1",
+    "sectionStart": 0,
     "stripManualNumbers": true
   },
   "figures": {

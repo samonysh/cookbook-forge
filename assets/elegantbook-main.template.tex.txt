@@ -79,6 +79,10 @@
   bookmarksopen=true
 }
 
+% 标题锚点防错位：\section 前预留 4 行，空间不足时先换页再落锚点。
+% 若不加，标题被推到下一页时锚点仍留在上一页末尾，目录/交叉引用会跳错页。
+\pretocmd{\section}{\needspace{4\baselineskip}}{}{}
+
 % ==================== 图形 ====================
 \usepackage{graphicx}
 \graphicspath{{figures/}}

@@ -246,37 +246,64 @@ async function checkPackage() {
     push("error", "container-missing", "META-INF/container.xml 不存在");
   }
 
-  // book.epub zip 合规（mimetype 第一且 STORED）—— 读原始字节，不依赖解压库
-  const epubPath = path.join(PROJECT, "book.epub");
+  // EPUB zip 合规（mimetype 第一且 STORED）—— 按实际产物名查找：
+  // lbuild-epub 产出 book.epub，部分项目按书名命名；统一 glob *.epub，排除隐藏/临时文件。
+  let epubPath = null;
   try {
-    await fs.access(epubPath);
-    const fh = await fs.open(epubPath, "r");
-    try {
-      const buf = Buffer.alloc(64);
-      await fh.read(buf, 0, 64, 0);
-      if (buf[0] !== 0x50 || buf[1] !== 0x4b) {
-        push("error", "zip-magic", "book.epub 不是有效 zip（PK 头缺失）");
-      } else {
-        const nameLen = buf.readUInt16LE(26);
-        const method = buf.readUInt16LE(8);
-        const name = buf.subarray(30, 30 + Math.min(nameLen, 34)).toString("latin1");
-        if (name !== "mimetype") {
-          push("error", "zip-mimetype-first", `zip 第一项是 "${name}"，必须是 mimetype（EPUB 规范）`);
-        }
-        if (method !== 0) {
-          push("error", "zip-mimetype-stored", "mimetype 必须以 STORED（未压缩）方式存储");
-        }
-        const contentBuf = Buffer.alloc(20);
-        await fh.read(contentBuf, 0, 20, 30 + nameLen);
-        if (contentBuf.toString("latin1") !== "application/epub+zip") {
-          push("error", "zip-mimetype-content", "mimetype 内容不是 application/epub+zip");
-        }
-      }
-    } finally {
-      await fh.close();
+    const entries = await fs.readdir(PROJECT, { withFileTypes: true });
+    const candidates = entries
+      .filter(
+        (e) =>
+          e.isFile() &&
+          /\.epub$/i.test(e.name) &&
+          !e.name.startsWith(".") &&
+          !e.name.startsWith("._") &&
+          !/\.tmp\.epub$/i.test(e.name)
+      )
+      .map((e) => e.name);
+    if (candidates.length) {
+      const stats = await Promise.all(
+        candidates.map(async (n) => ({ n, m: (await fs.stat(path.join(PROJECT, n))).mtimeMs }))
+      );
+      stats.sort((a, b) => b.m - a.m);
+      // 同时存在 book.epub 与书名版时，优先 book.epub；否则取最新产物
+      const preferred = stats.find((s) => s.n === "book.epub") || stats[0];
+      epubPath = path.join(PROJECT, preferred.n);
     }
-  } catch {
-    push("warn", "epub-missing", "book.epub 尚未打包（先完成全部章节转换后运行 lbuild-epub.mjs）");
+  } catch {}
+  if (!epubPath) {
+    push("warn", "epub-missing", "未找到 *.epub（先完成全部章节转换后运行 lbuild-epub.mjs）");
+  } else {
+    const epubName = path.basename(epubPath);
+    try {
+      const fh = await fs.open(epubPath, "r");
+      try {
+        const buf = Buffer.alloc(64);
+        await fh.read(buf, 0, 64, 0);
+        if (buf[0] !== 0x50 || buf[1] !== 0x4b) {
+          push("error", "zip-magic", `${epubName} 不是有效 zip（PK 头缺失）`);
+        } else {
+          const nameLen = buf.readUInt16LE(26);
+          const method = buf.readUInt16LE(8);
+          const name = buf.subarray(30, 30 + Math.min(nameLen, 34)).toString("latin1");
+          if (name !== "mimetype") {
+            push("error", "zip-mimetype-first", `${epubName} 的第一项是 "${name}"，必须是 mimetype（EPUB 规范）`);
+          }
+          if (method !== 0) {
+            push("error", "zip-mimetype-stored", `${epubName} 的 mimetype 必须以 STORED（未压缩）方式存储`);
+          }
+          const contentBuf = Buffer.alloc(20);
+          await fh.read(contentBuf, 0, 20, 30 + nameLen);
+          if (contentBuf.toString("latin1") !== "application/epub+zip") {
+            push("error", "zip-mimetype-content", `${epubName} 的 mimetype 内容不是 application/epub+zip`);
+          }
+        }
+      } finally {
+        await fh.close();
+      }
+    } catch {
+      push("error", "epub-read", `无法读取 ${epubName}`);
+    }
   }
 
   return issues;

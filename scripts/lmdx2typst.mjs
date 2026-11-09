@@ -68,6 +68,8 @@ function genHeadingNumbering(cfg) {
   let pattern = String(cfg?.headings?.level1Pattern || "第 {n} 章");
   if (!pattern.includes("{n}")) pattern = "第 {n} 章";
   const numbering = cfg?.headings?.numbering || "1.1";
+  // sectionStart: 首个二级标题的编号。0 = 与 MDX 的 N.0 骨架一致（默认），1 = 传统从 N.1 起。
+  const sectionStart = Number.isFinite(cfg?.headings?.sectionStart) ? cfg.headings.sectionStart : 0;
   // "第 {n} 章" -> ["第 ", " 章"] -> `"第 " + numbering("1", ..nums) + " 章"`
   const segs = pattern.split("{n}").map((p, i) => {
     if (i === 0) return p ? [JSON.stringify(p)] : [];
@@ -76,12 +78,19 @@ function genHeadingNumbering(cfg) {
     return seg;
   });
   const l1Expr = segs.flat().join(" + ");
+  const subExpr =
+    sectionStart === 0
+      ? [
+          "    let p = nums.pos()",
+          `    numbering("${numbering}", p.at(0), p.at(1) - 1, ..p.slice(2))`,
+        ]
+      : [`    numbering("${numbering}", ..nums)`];
   return [
     "#set heading(numbering: (..nums) => {",
     "  if nums.pos().len() <= 1 {",
     `    ${l1Expr}`,
     "  } else {",
-    `    numbering("${numbering}", ..nums)`,
+    ...subExpr,
     "  }",
     "})",
   ].join("\n");
