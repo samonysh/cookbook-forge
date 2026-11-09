@@ -11,6 +11,7 @@
  *   node scripts/ratio-count.mjs --strict             # 有 ERROR 时退出码 1
  *   node scripts/ratio-count.mjs --threshold=8        # 自定义偏差阈值（百分点，默认 10）
  *   node scripts/ratio-count.mjs --min-body=40000     # 自定义 body3 下限（默认 50000）
+ *   node scripts/ratio-count.mjs --synth-max-closure=18  # 含章末回收段的章节综合段上限（默认 18，下限恒为 10）
  *
  * 口径实现统一放在 scripts/lib/word-caliber.mjs（与 word-count.mjs 共用）。
  * 表格替代论述的 WARN 阈值：成段论述 <120 字，或表格折算占比 >60% 且成段论述 <300 字。
@@ -44,6 +45,8 @@ const OUT_FILE = path.resolve(ROOT, opt("out", "metadata/ratio-report.txt"));
 const THRESHOLD = Number(opt("threshold", "10"));
 const SYNTH_MIN = Number(opt("synth-min", "10"));
 const SYNTH_MAX = Number(opt("synth-max", "15"));
+// 章末回收段属于综合层，会结构性推高综合段占比；含回收段的章节上限放宽一档。
+const SYNTH_MAX_CLOSURE = Number(opt("synth-max-closure", "18"));
 const MIN_BODY = Number(opt("min-body", "50000"));
 const WRITE = flag("write");
 const STRICT = flag("strict");
@@ -147,6 +150,50 @@ async function loadTargets() {
   return { perChapter, bookDefault, source };
 }
 
+// ---------- 章末回收段 ----------
+// 与 chapter-lint 的 G2 同口径：章末两节内、双线索引之前的独立段落，
+// 同段内同时出现「问题复述」与「认识变化」两类线索。
+const PROBLEM_RECALL_RE = /回到\s*\d+\.0|回到第?\s*\d+\s*章|(?:第?\s*\d+\.0|章首|本章开头|开头|最初)的?(?:那个|三个)?问题/;
+const CHANGE_RE =
+  /原来(?:以为|觉得|认为|想)|此前(?:以为|认为)|最初(?:以为|认为)|现在(?:才)?(?:知道|明白|清楚)|现在可以(?:给出)?(?:完整)?回答|不再是[^。]{0,40}而是/;
+const INDEX_LINE_RE = /^\s*(?:[-*]\s+\*\*(?:应用线|原理线|综合段)|[^\n]{0,16}双线索引[：:])/;
+
+function hasClosureParagraph(body) {
+  const lines = body.split(/\r?\n/);
+  const h2 = [];
+  lines.forEach((l, i) => {
+    const m = l.match(/^##\s+(\d+)\.(\d+)\s+/);
+    if (m) h2.push({ i, n: Number(m[2]) });
+  });
+  const contentH2 = h2.filter((h) => h.n !== 0 && h.n !== 10);
+  if (!contentH2.length) return false;
+  const tail = contentH2.slice(-2);
+  const last = tail[tail.length - 1];
+  const next = h2.find((h) => h.i > last.i);
+  const tailLines = lines.slice(tail[0].i, next ? next.i : lines.length);
+  const indexAt = tailLines.findIndex((l) => INDEX_LINE_RE.test(l));
+  const limit = indexAt >= 0 ? indexAt : tailLines.length;
+  const blocks = [];
+  let cur = null;
+  for (let i = 0; i < limit; i++) {
+    const l = tailLines[i];
+    if (!l.trim()) {
+      cur = null;
+      continue;
+    }
+    if (cur) cur.text += "\n" + l;
+    else {
+      cur = { text: l };
+      blocks.push(cur);
+    }
+  }
+  return blocks.some((b) => {
+    const t = b.text.trim();
+    if (/^(?:[-*|>#<!`]|<div|<\/div)/.test(t)) return false;
+    return PROBLEM_RECALL_RE.test(t) && CHANGE_RE.test(t);
+  });
+}
+
 // ---------- 解析单章 ----------
 function analyzeChapter(raw, fileName) {
   const { body, fm } = parseFrontmatter(raw, fileName);
@@ -191,6 +238,8 @@ function analyzeChapter(raw, fileName) {
   const body3 = twoLine + sums.synthesis;
   const measuredApp = twoLine > 0 ? (sums.app / twoLine) * 100 : NaN;
   const synthShare = body3 > 0 ? (sums.synthesis / body3) * 100 : NaN;
+  const hasClosure = hasClosureParagraph(body);
+  const synthMax = hasClosure ? SYNTH_MAX_CLOSURE : SYNTH_MAX;
 
   return {
     file: fileName,
@@ -204,6 +253,8 @@ function analyzeChapter(raw, fileName) {
     body3,
     measuredApp,
     synthShare,
+    hasClosure,
+    synthMax,
     issues,
   };
 }
@@ -264,10 +315,11 @@ for (const f of files) {
       msg: `应用线占比 ${r.measuredApp.toFixed(1)}% 相对目标 ${target.toFixed(0)}% 偏差 ${r.dev.toFixed(1)}pp，超过阈值 ${THRESHOLD}pp`,
     });
   }
-  if (!Number.isNaN(r.synthShare) && (r.synthShare < SYNTH_MIN || r.synthShare > SYNTH_MAX)) {
+  if (!Number.isNaN(r.synthShare) && (r.synthShare < SYNTH_MIN || r.synthShare > r.synthMax)) {
+    const scope = r.hasClosure ? `含回收段章节按 ${SYNTH_MIN}%–${r.synthMax}% 判定` : `${SYNTH_MIN}%–${r.synthMax}%`;
     r.issues.push({
       level: "WARN",
-      msg: `综合段占 ${r.synthShare.toFixed(1)}%，超出 ${SYNTH_MIN}%–${SYNTH_MAX}%`,
+      msg: `综合段占 ${r.synthShare.toFixed(1)}%，超出 ${scope}`,
     });
   }
   if (r.twoLine === 0) {
@@ -296,7 +348,7 @@ out.push(`表格口径: Markdown 表格内 CJK 按 1/2 计数（×0.5）；表�
 out.push(`三分口径: tApp = 应用线 + 原理线；body3 = tApp + 综合段（全书正文）；含 meta = body3 + 章首等`);
 out.push(`正文下限: body3 ≥ ${MIN_BODY} 字（最低下限，不是目标值）`);
 out.push(`目标来源: ${targets.source.length ? targets.source.join(" + ") : "未找到目标文件"}`);
-out.push(`偏差阈值: ${THRESHOLD}pp；综合段区间: ${SYNTH_MIN}%–${SYNTH_MAX}%`);
+out.push(`偏差阈值: ${THRESHOLD}pp；综合段区间: ${SYNTH_MIN}%–${SYNTH_MAX}%（含章末回收段的章节上限放宽到 ${SYNTH_MAX_CLOSURE}%，下限 ${SYNTH_MIN}% 不变）`);
 out.push("");
 out.push("| 章 | 模块 | 应用 | 原理 | 综合 | meta | 表格折算 | 实测比例 | 目标 | 偏差(pp) | 状态 |");
 out.push("|---|---|---|---|---|---|---|---|---|---|---|");
@@ -326,6 +378,12 @@ for (const r of results) {
 
 out.push("");
 out.push("> 应用/原理/综合/meta 各列均已含表内 CJK 的 1/2 折算；「表格折算」列是其中来自表格的部分，仅供核对，不要与前三列重复相加。逐章与全书各自四舍五入，纵向相加可能有 ±1 误差。");
+out.push("> 章末回收段属于综合层，会结构性推高综合段占比，不是内容失衡。因此含回收段的章节上限按 " + SYNTH_MAX_CLOSURE + "% 判定，下限 " + SYNTH_MIN + "% 不变；**禁止为压回 " + SYNTH_MAX + "% 而删减回收段内容或挪走机制解释**。");
+
+const closureList = results.filter((r) => r.hasClosure).map((r) => `ch${String(r.chapter).padStart(2, "0")}`);
+const plainList = results.filter((r) => !r.hasClosure).map((r) => `ch${String(r.chapter).padStart(2, "0")}`);
+out.push("");
+out.push(`- **回收段判定**：含回收段的章节按 ${SYNTH_MIN}%–${SYNTH_MAX_CLOSURE}% 判定（${closureList.join("、") || "无"}）；未检出回收段的章节按 ${SYNTH_MIN}%–${SYNTH_MAX}% 判定（${plainList.join("、") || "无"}）。`);
 
 const tApp = total.app + total.principle;
 const tBody = tApp + total.synthesis;
