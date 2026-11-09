@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.7.0"><img src="https://img.shields.io/badge/version-1.7.0-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.8.0"><img src="https://img.shields.io/badge/version-1.8.0-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -221,8 +221,8 @@ npx skills add samonysh/cookbook-forge
 打包发布：
 
 ```bash
-node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.7.0.zip
-skillhub publish ./cookbook-forge --changelog "v1.7.0: 可读性检查扩到缩写，W2 严格模式升 ERROR，长句阈值放宽至 120/180"
+node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.8.0.zip
+skillhub publish ./cookbook-forge --changelog "v1.8.0: 新增组织层写作规范（O1–O9）与 G1–G5 检查（章弧、章末回收、机制先行、原理证据锚、单节过平），模板与阶段 3 同步"
 ```
 
 ## License

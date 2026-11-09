@@ -3,6 +3,7 @@
 > 适用对象：`cookbook-forge` 阶段 3 的逐章 MDX 写作，以及阶段 6 的 `chapter-lint` 复核。
 > 解决的核心病症：**章首或小节开头直接抛出概念/名词，读者不知道它是干什么用的、为什么需要、什么时候会遇到它。**
 > 本文只给可执行规则与判定口径，不重复 `SKILL.md` 的流水线；图表、代码、注解规则仍以 `SKILL.md` 为准。
+> 本文管句子与段落。段落以上的章弧、节间问题链、论证结构、术语主线见 `references/narrative-structure-guide.md`（O1–O9 / G1–G5）。
 
 ---
 
@@ -292,3 +293,4 @@
 3. 写每段：第一句先给判断，末尾放结论。
 4. 全文过一遍：删空转开场，拆 >120 字长句，去「进行/实现/完成 + 名词」，补主语。
 5. 跑 `node scripts/chapter-lint.mjs --root=<book>`，按 W1–W6 修；误报用 `<!-- lint-ignore: Wx -->` 标注并写明理由。
+6. 章级复核：按 `references/narrative-structure-guide.md` 的 G1–G5 与自查清单过关弧与问题链。

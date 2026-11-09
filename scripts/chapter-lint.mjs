@@ -23,6 +23,11 @@
  *   W4 段落是否有可识别的主题句（≥100 字段落，首句 ≤70 字且不以衔接词起头）
  *   W5 长句：单句 >120 字 WARN、>180 字 ERROR；≥5 逗号且 ≥100 字判「一逗到底」
  *   W6 小节首段是否以「这/该/此/其/它」开头且标题无先行词
+ *   G1 N.0 是否有可回答的问题句
+ *   G2 章末两节是否回收了 N.0 的问题（共享实词 <2 即断链）
+ *   G3 首个正文节是否原理线；是否连续 ≥3 个原理节
+ *   G4 全章原理节是否 0 代码/图/表/源码证据锚
+ *   G5 单个 H2 下 H3 是否 ≥8（一节弧过长）
  *
  * 可读性误报控制：
  *   - 只检查正文段落，跳过代码、表格、列表、引用、callout、公式、图题
@@ -30,6 +35,7 @@
  *   - 缩写跳过行内代码、通用缩写白名单与 L1/I3 这类等级编号
  *   - `<!-- lint-ignore: W2 -->` 可豁免下一个小节/段落，多个代码用逗号分隔
  *   - `--no-readability` 整体关闭 W1–W6（历史书稿迁移用）
+ *   - `--no-organization` 整体关闭 G1–G5（G 系列恒为 WARN，不随 --strict 升级）
  */
 
 import { promises as fs } from "node:fs";
@@ -48,6 +54,7 @@ const FIGURE_DIR = path.resolve(ROOT, "mdx", "public", "figures");
 const OUT_FILE = path.resolve(ROOT, opt("out", "metadata/chapter-lint.txt"));
 const STRICT = argv.includes("--strict");
 const NO_READABILITY = argv.includes("--no-readability");
+const NO_ORGANIZATION = argv.includes("--no-organization");
 
 const FIGURE_TYPES = new Set([
   "architecture",
@@ -252,7 +259,7 @@ function buildDocSections(lines) {
       if (tr) pendingTrack = tr[1].toLowerCase();
       const ig = text.match(/lint-ignore\s*:\s*([A-Za-z0-9,\s]+)/i);
       if (ig) {
-        for (const c of ig[1].split(/[,\s]+/)) if (/^W[1-6]$/.test(c)) ignoreNext.add(c);
+        for (const c of ig[1].split(/[,\s]+/)) if (/^(?:W[1-6]|G[1-5])$/.test(c)) ignoreNext.add(c);
       }
       i = j;
       continue;
@@ -498,6 +505,147 @@ function checkReadability(lines, label, add) {
 }
 
 
+// ---------------- 组织层检查（G1–G5） ----------------
+// 详见 references/narrative-structure-guide.md。只查 H2 层，N.0 / N.10 / meta 轨不参与。
+
+const META_TITLE_RE = /本章参考|本章地图|阅读路线|本章问题|本章位置|本章目标/;
+const N0_TITLE_RE = /(^|\s)(\d+\.)?0(\s|$)|本章位置|本章问题|阅读路线|本章地图/;
+// 章末「收束句」的可观测代理：回到问题、说明认识变化、或明确小结。
+const CLOSURE_RE = /(回到|本章开头|开头的问题|一开始|最初|现在可以(?:给出)?回答|现在知道|原来以?为|不再是.{0,24}而是|综上|小结|本章回答)/;
+const STOP_CHARS = new Set(
+  "的了吗呢吧啊与和或是在有把被对于从到会能要可就让给这那哪些什么怎样如何一个也都而其为所以因此如果但是然后".split(""),
+);
+
+/** 取某小节覆盖的原始行（含其下 H3、代码、表格），用于轨道与证据判定。 */
+function sectionRange(lines, sections, idx) {
+  const start = sections[idx].lineNo - 1;
+  let end = lines.length - 1;
+  for (let j = idx + 1; j < sections.length; j++) {
+    if (sections[j].level <= sections[idx].level) {
+      end = sections[j].lineNo - 2;
+      break;
+    }
+  }
+  return lines.slice(start, end + 1);
+}
+
+function hasEvidence(rawLines) {
+  return rawLines.some(
+    (l) =>
+      /^\s*```/.test(l) ||
+      /<!--\s*FIGURE\s*:/.test(l) ||
+      /<!--\s*source\s*:/.test(l) ||
+      /^\s*\|/.test(l) ||
+      /^\s*!\[/.test(l),
+  );
+}
+
+function cjkBigrams(text) {
+  const set = new Set();
+  for (const run of text.match(/[\u4e00-\u9fff]+/g) || []) {
+    for (let i = 0; i + 1 < run.length; i++) {
+      const bg = run.slice(i, i + 2);
+      if (STOP_CHARS.has(bg[0]) || STOP_CHARS.has(bg[1])) continue;
+      set.add(bg);
+    }
+  }
+  return set;
+}
+
+function extractChapterQuestion(text) {
+  const sentences = text
+    .split(/(?<=[。！？\n])/)
+    .map((s) => s.replace(/^[\s>*_`#-]+/, "").trim())
+    .filter(Boolean);
+  const qIdx = sentences.findIndex((s) => /[？?]/.test(s));
+  // 有的章用问句立题，有的章用「本章只回答三个问题。第一……第二……」逐条列。
+  if (qIdx >= 0) return sentences.slice(qIdx, qIdx + 3).join("");
+  const marker = text.search(
+    /(?:本章|这一章)[^\n。]{0,24}(?:回答|解决|问题|怎么|什么|如何|为什么|目标|任务|决策)[^\n。]{0,80}/,
+  );
+  if (marker >= 0) return text.slice(marker, marker + 500);
+  return null;
+}
+
+function checkOrganization(lines, label, add) {
+  const sections = buildDocSections(lines);
+  const h2 = sections.filter((s) => s.level === 2);
+  if (!h2.length) return;
+
+  const isMetaSection = (s) => s.track === "meta" || META_TITLE_RE.test(s.title) || /本章参考/.test(s.title);
+  const n0 = h2.find((s) => N0_TITLE_RE.test(s.title)) || h2[0];
+  if (!n0) return;
+  const contentH2 = h2.filter((s) => s !== n0 && !isMetaSection(s));
+  const n0Idx = sections.indexOf(n0);
+  // 标题行不算「问题句」；否则「N.0 本章问题」这种标题会自己命中关键词。
+  const n0Text = sectionRange(lines, sections, n0Idx)
+    .filter((l) => !/^#{1,6}\s/.test(l.trim()))
+    .join("\n");
+  const question = extractChapterQuestion(n0Text);
+
+  // ---- G1 章首无问题句 ----
+  if (!question && !n0.ignore.has("G1")) {
+    add(label, "WARN", "G1", `章节「${n0.title}」没有可回答的问题（缺问句或「本章要解决的问题是」），章弧无从闭合`);
+  }
+
+  // ---- G2 章末未回收章首问题 ----
+  if (question) {
+    const tail = contentH2.slice(-2);
+    const tailText = tail.map((s) => sectionRange(lines, sections, sections.indexOf(s)).join("\n")).join("\n");
+    const qGrams = cjkBigrams(question);
+    const tGrams = cjkBigrams(tailText);
+    let shared = 0;
+    for (const g of qGrams) if (tGrams.has(g)) shared++;
+    const hasClosure = CLOSURE_RE.test(tailText);
+    const ignored = tail.some((s) => s.ignore.has("G2"));
+    if ((shared < 2 || !hasClosure) && !ignored) {
+      const why = shared < 2 ? `只有 ${shared} 个共享实词` : "没有「回到问题 / 认识变化」的收束句";
+      add(label, "WARN", "G2", `章末两节${why}，未回收 N.0 的问题；请复述问题并写「原来以为…现在知道…」`);
+    }
+  }
+
+  // ---- G3 机制先行 / 机制连堆 ----
+  // 未标 track 的书稿不做首节判定，避免误报。
+  if (contentH2.length >= 2 && !contentH2[0].ignore.has("G3")) {
+    const first = contentH2[0];
+    if (first.track === "principle") {
+      add(label, "WARN", "G3", `首个正文节「${first.title}」是原理线，读者还没见过任何现象；先放一个应用节`);
+    }
+  }
+  let run = 0;
+  for (const s of contentH2) {
+    if (s.track === "principle") {
+      run++;
+      // 现有双线骨架允许原理线成组出现（通常 3–4 节）；≥5 才算「机制连堆」。
+      if (run === 5 && !s.ignore.has("G3")) {
+        add(label, "WARN", "G3", `连续 5 个原理节（至「${s.title}」），中间需要插一个应用或综合节`);
+      }
+    } else {
+      run = 0;
+    }
+  }
+
+  // ---- G4 原理线无证据锚 ----
+  const principleSections = contentH2.filter((s) => s.track === "principle");
+  if (principleSections.length >= 2) {
+    const anchored = principleSections.some((s) =>
+      hasEvidence(sectionRange(lines, sections, sections.indexOf(s))),
+    );
+    if (!anchored && !n0.ignore.has("G4")) {
+      add(label, "WARN", "G4", `全章 ${principleSections.length} 个原理节没有任何代码/图/表/源码证据锚，属于纯说理`);
+    }
+  }
+
+  // ---- G5 单节过平 ----
+  for (const s of h2) {
+    const subs = sections.filter((x) => x.level === 3 && x.parent === s).length;
+    if (subs >= 8 && !s.ignore.has("G5")) {
+      add(label, "WARN", "G5", `小节「${s.title}」含 ${subs} 个子小节，一节的弧太长，拆节或补综合段`);
+    }
+  }
+}
+
+
 const files = (await fs.readdir(MDX_DIR)).filter((f) => f.endsWith(".mdx")).sort();
 const report = [];
 const issues = [];
@@ -682,6 +830,8 @@ for (const f of files) {
 
   // ---- W1–W6 可读性（详见 references/readability-style-guide.md）----
   if (!NO_READABILITY) checkReadability(lines, label, add);
+  // ---- G1–G5 组织层（详见 references/narrative-structure-guide.md）----
+  if (!NO_ORGANIZATION) checkOrganization(lines, label, add);
 
   summary.push({
     label,
@@ -730,6 +880,28 @@ if (wIssues.length) {
     if (!list.length) continue;
     const e = list.filter((i) => i.level === "ERROR").length;
     report.push(`| ${code} | ${e} | ${list.length - e} | ${meanings[code]} |`);
+  }
+  report.push("");
+}
+
+const gIssues = issues.filter((i) => /^G[1-5]$/.test(i.code));
+if (gIssues.length) {
+  report.push("## 组织层告警分布（G1–G5）");
+  report.push("");
+  report.push("| 代码 | ERROR | WARN | 含义 |");
+  report.push("|---|---|---|---|");
+  const gMeanings = {
+    G1: "章首无问题句",
+    G2: "章末未回收章首问题",
+    G3: "机制先行 / 机制连堆",
+    G4: "原理线无证据锚",
+    G5: "单节过平（H3 ≥8）",
+  };
+  for (const code of ["G1", "G2", "G3", "G4", "G5"]) {
+    const list = gIssues.filter((i) => i.code === code);
+    if (!list.length) continue;
+    const e = list.filter((i) => i.level === "ERROR").length;
+    report.push(`| ${code} | ${e} | ${list.length - e} | ${gMeanings[code]} |`);
   }
   report.push("");
 }
