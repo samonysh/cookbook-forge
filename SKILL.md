@@ -2,7 +2,7 @@
 name: "cookbook-forge"
 slug: "cookbook-forge"
 displayName: "Cookbook Forge"
-version: "1.5.2"
+version: "1.7.0"
 license: "MIT"
 summary: "从多源资料生成深度技术 CookBook / Handbook / Survey，产出 MDX -> ElegantBook PDF、Nextra 网站、优化 EPUB、Typst PDF。"
 description: "Generates deep technical CookBooks, Handbooks, and Surveys from user materials (websites, PDFs, EPUBs, GitHub repos, arxiv papers, docs). Produces MDX chapters first, then ElegantBook LaTeX/PDF, Nextra website, optimized EPUB, and Typst PDF. Invoke when user asks to write a Cookbook, handbook, survey, technical book, or structured long-form documentation for a project/domain."
@@ -73,7 +73,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `scripts/kroki-render.mjs` - PlantUML 通过 Kroki.io 远程渲染（deflate+base64url 编码 GET，含隐私提示）。
 - `scripts/render-figures.mjs` - 图位与图源对齐：扫描 `<!-- FIGURE: fig-NN-M ... -->`，优先调用 `assets/diagram-style/export_svg.py` 把 `mdx/public/diagrams-src/<id>.html` 导出为 `mdx/public/figures/<id>.svg`，校验正文引用与每章 ≥2 图，报告写 `metadata/figure-report.txt`。
 - `scripts/ratio-count.mjs` - 双线比例与正文口径度量：按 `<!-- track: app|principle|synthesis|meta -->` 汇总各轨 CJK（剔除代码块/HTML 注释/meta，表格内 CJK × 0.5），对比 frontmatter/大纲目标比例；对「有表但成段论述 <120 字」或「表格折算占比 >60% 且成段论述 <300 字」的小节报 WARN；`--write` 回填 frontmatter，报告写 `metadata/ratio-report.txt`。
-- `scripts/chapter-lint.mjs` - 章节结构 lint：V1 验证等级标记、V2 图位语法、V3 frontmatter figures 一致性、V4 逐块实测记录，以及 F1 图产物/每章下限、C1 代码中文注释、M1 公式中文说明、R1 材料点评禁语（WARN）、N1 章末参考小节。
+- `scripts/chapter-lint.mjs` - 章节结构 lint：V1 验证等级标记、V2 图位语法、V3 frontmatter figures 一致性、V4 逐块实测记录、V5 图号顺序，以及 F1 图产物/每章下限、C1 代码中文注释、M1 公式中文说明、R1 材料点评禁语（WARN）、N1 章末参考小节、N2 占位章号、W1–W6 可读性检查（空转开场/概念先行/术语与缩写裸奔/主题句/长句/段首指代；`--strict` 下 W2 升 ERROR，其余 W 保持 WARN；均支持 `<!-- lint-ignore: Wx -->` 豁免）。
 - `scripts/mdx2book.mjs` - **确定性**的 MDX -> Typst / LaTeX / EPUB XHTML 章节转换器（`--format typst|latex|epub|all --root <book>`）：按块解析标题、GFM 表格、围栏代码、图位与图/表交叉引用，正文逐字保留，只做语法层转换。图表使用显式编号（`fig-NN-M` 去前导零得到 `<fig-C-M>` / `fig:C-M`），不依赖后处理自动计数器，与 LLM 路径的 numbering 规则等价；适合结构固定（H2/H3、无 JSX/公式）的章节，是 5b/5d/5e 的低成本替代路径。
 - `assets/prompts/mdx-to-latex.md` - LLM 转换 MDX->LaTeX 的系统 Prompt 模板（定义所有映射规则）。
 - `assets/prompts/mdx-to-epub.md` - LLM 转换 MDX->EPUB XHTML 的系统 Prompt 模板。
@@ -95,6 +95,7 @@ Domain CookBook / Handbook / Survey 生成器。从用户提供的自然语言�
 - `references/stage-5d-epub.md` - 阶段 5d：EPUB 子流程（按需读取）。
 - `references/stage-5e-typst.md` - 阶段 5e：Typst（ilm 模板）子流程（按需读取）。
 - `references/technical-book-analysis-methodology.md` - 前置分析方法论「定·拆·图·深·织」：对象判定、多切面拆解、全局地图、概念→原理递归、双线编排与每步 DoD（阶段 2–3 按需读取）。
+- `references/readability-style-guide.md` - 可读性写作规范：概念先行、术语锚点、段落主题句、长句断句、中文名词化等 12 条规则，附正反例、文献依据与 W1–W6 lint 判定阈值（阶段 3 写作与阶段 6 复核必读）。
 
 ---
 
@@ -296,7 +297,7 @@ references:
 
 #### 写作硬约束（阶段 3 必读）
 
-以下七条是阶段 3 的硬性约束，违反任一条都应在阶段 6 被 lint 或人工复核拦下。
+以下八条是阶段 3 的硬性约束，违反任一条都应在阶段 6 被 lint 或人工复核拦下。
 
 1. **轨道标记**：每个 H2 上一行写 `<!-- track: app|principle|synthesis|meta -->`。`N.0`/`N.10` 用 `meta`；应用线 `app`；原理线 `principle`；综合段 `synthesis`。阶段 4 用 `ratio-count.mjs` 汇总，不允许写前估算。
 2. **验证等级**：每个 ```python/```py 代码块前 3 行内写 `<!-- verify: L1|L2|L3 -->`。L1 = 导入与语法通过；L2 = 端到端跑通（含离线测试模型等路径）；L3 = 行为可信（真实模型或可验证的行为断言）。只到 L2 的示例不得对行为下断言，只能陈述「跑通」。逐块记录写 `metadata/verify/chNN.txt`。
@@ -305,6 +306,7 @@ references:
 5. **公式中文说明**：每个块级公式后说明符号含义，以及这个式子到底在说明什么。
 6. **正文不点材料 + 章末参考**：正文不得出现「你提供的文档有偏差」「原文写法有误」这类针对材料来源的表述，也不得引用材料瑕疵展开。每章末尾独立开 `N.10 本章参考`，简短列出本章参考的内容、提供了什么、与本章的关系；不并入 `N.9`。
 7. **源码证据单独标注**：原理线允许、也鼓励摘录关键源代码作为机制证据，用来解释对象结构、调度顺序和不变量；但只摘关键片段，并说明它证明了什么，不整段贴。源码摘录用 `<!-- source: <路径>#L<a>-L<b> | 证明：<结论> -->` + 紧随的代码围栏标注；它不是可运行示例，**不写 `verify: Lx`，也不进入 `metadata/verify/chNN.txt`**，不能冒充验证等级。应用线不得依赖源码摘录，只能引用公开 API 与可观测输出（`result.output`、`usage`、消息序列、异常类型等）。`chapter-lint` 会把带 `source` 标记的块排除在 V1/C1/V4 之外单独计数。
+8. **可读性（W1–W6）**：章首先写读者此刻的具体困境与不解决的代价，第四句才引入核心概念；每个 H2/H3 第一段先交代「什么时候会遇到、不处理会怎样」，再给定义（H3 首段 <60 字视为过渡句，豁免此项）；术语与缩写（MCP、HITL、OTel）首次出现必须带一句白话解释或全称括注（`就是 / 即 / 指的是 / 可以理解为`）；段落首句是 ≤70 字的主题句，不以「因此/所以/但是/此外」直接开头；单句 ≤120 CJK（>180 为 ERROR），≥5 个逗号且 ≥100 字必须拆；禁止「本节将介绍」「众所周知」「随着……发展」这类空转开场。完整规则、正反例与文献依据见 `references/readability-style-guide.md`；阶段 6 由 `chapter-lint.mjs` 的 W1–W6 复核，误报用 `<!-- lint-ignore: Wx -->` 标注理由；`--strict` 下 W2 升为 ERROR，其余 W 项保持 WARN。
 
 #### 图表规范
 

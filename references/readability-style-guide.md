@@ -1,0 +1,294 @@
+# 可读性写作规范：让读者先知道「为什么需要这个概念」
+
+> 适用对象：`cookbook-forge` 阶段 3 的逐章 MDX 写作，以及阶段 6 的 `chapter-lint` 复核。
+> 解决的核心病症：**章首或小节开头直接抛出概念/名词，读者不知道它是干什么用的、为什么需要、什么时候会遇到它。**
+> 本文只给可执行规则与判定口径，不重复 `SKILL.md` 的流水线；图表、代码、注解规则仍以 `SKILL.md` 为准。
+
+---
+
+## 0. 一句话原则
+
+**先给读者一个「没有它就会疼」的具体场景，再给名字和定义；名字出现之后，立刻用一句白话说明它是什么，再用一个例子把它落地。**
+
+这条原则不是文风偏好。它同时对应三条有据可查的写作/教学结论：
+
+1. 读者按「旧信息 → 新信息」的顺序理解句子和段落，段落开头应承接已知、结尾承载新信息（Gopen & Swan 的 topic / stress position）。
+2. 人一次只能处理少量新元素；在定义之前塞入未解释的术语，属于可避免的外在认知负荷（Sweller 的 extraneous load；Mayer 的 pre-training / coherence 原则）。
+3. 教学应从真实任务与已有经验出发，先激活问题，再给支持性信息（Merrill 的 activation 原则；4C/ID 的 supportive information 放在练习之前）。
+
+---
+
+## 1. 规则清单
+
+编号 `R1–R12` 与 `scripts/chapter-lint.mjs` 的 `W1–W6` 对应关系见第 4 节。标「人工」的条目不做机械判定，但属于阶段 6 人工复核项。
+
+### R1 章首先要说困境，不要先报概念（人工 + W2）
+
+- **规则**：`N.0` 的前 3–5 句按「读者此刻的具体困境 → 不解决的代价 → 本章引入什么」排列；本章要引入的核心概念放在最后一句，且第一次出现时带一句白话解释。
+- **判定**：章首前三段内，若首个技术名词出现在「困境/代价」之前，视为概念先行。
+- **依据**：IEEE 作者指南要求 Introduction 先说明研究为什么重要、解决什么问题；Merrill 的 activation 原则要求先激活与问题相关的已有经验。
+- **反例**：
+  > 本章介绍 Agent 框架的输出契约。输出契约是指用 Schema 描述模型输出结构的机制。
+- **改后**：
+  > 下游系统要入库，字段缺一个就会在写库时炸；而模型返回的是一段自然语言。要让它稳定产出可入库的字段，得先把「输出长什么样」写成机器能校验的契约。这个框架把这套契约叫输出 Schema。
+- **落地产物**：`N.0` 首段 + 「本章地图」callout。
+
+### R2 小节开头先交代动机，再给定义（W2）
+
+- **规则**：每个 H2/H3 的第一段，先回答「什么情况下读者会遇到这个问题/不处理会怎样」，再出现该节的第一个定义或术语表。
+- **判定**：小节第一段的前两句内出现定义式表述（`是指 / 指的是 / 定义为 / 是一种 / 即`），且前两句没有动机线索（`问题 / 症状 / 失败 / 报错 / 超时 / 不一致 / 一旦 / 如果你 / 当…时 / 否则 / 代价 / 风险 / 误判 / 为了`）→ 命中。H3 首段不足 60 个 CJK 字视为过渡句，不判此项；≥60 字的 H3 照常检查，不因所属 H2 已有动机而豁免。`--strict` 下此项为 ERROR。
+- **依据**：Gopen & Swan 的 topic position（段首应给上下文而非新信息）；Google Technical Writing One 要求段落首句确立中心点；中文技术文档写作风格指南 3.2 要求中心句放段首。
+- **反例**：
+  > 框架内部并不是「一个 `output_type` 对应一个分支」，而是先把输出规格编译成 `OutputSchema` 的子类，再由子类决定请求里带什么。
+- **改后**：
+  > 同一份业务代码换一种输出模式就报错时，只看 `output_type` 已经解释不了差异：真正决定请求载荷的是框架内部的编译结果。框架先把输出规格编译成 `OutputSchema` 的子类，再由子类决定请求里带什么。
+- **落地产物**：每个 H2/H3 的首段。
+
+### R3 术语与缩写首次出现必须带一句白话解释（W3）
+
+- **规则**：术语（加粗的**概念名**、首次出现的缩写、框架自定义类型名）第一次出现时，同一句或下一句内要有白话锚点：`就是 / 即 / 指的是 / 是指 / 可以理解为 / 相当于 / 好比 / 通俗地说`，或一个中文括注。缩写（全大写如 `MCP`、`HITL`，驼峰缩写如 `OTel`）首次出现时，带全称括注（`MCP（Model Context Protocol）`）、反向写法（`Model Context Protocol（MCP）`）或一句白话解释。
+- **判定**：加粗术语只查首次出现（3–10 个 CJK 字，且在标题中出现或全章重复出现）；一次性加粗的强调短语、图题/表题、以冒号结尾的标签、要点 callout 内的条目不计。紧跟在术语后的功能式描述（「负责…」「把…翻译/转换/封装成…」）视为已解释。缩写按原文扫描，跳过行内代码、通用缩写白名单（API / JSON / HTTP / URL / ID / SDK 等）与 `L1`/`I3` 这类等级编号；首次出现后 60 字内无白话锚点、且其后不是全称括注，才报。
+- **依据**：Google Technical Writing One「Define new or unfamiliar terms」；Mayer 的 pre-training 原则（先知道构件名称与特征，再学机制）。
+- **反例**：
+  > 运行图只有四类业务节点（外加图框架的 `Start` / `End`）。
+- **改后**：
+  > 运行图就是「一次运行会经过哪些节点、节点之间怎么走」的图；它只有四类业务节点（外加图框架的 `Start` / `End`）。
+- **落地产物**：术语首次出现处，或该节的工作定义段。
+
+### R4 段落必须有可识别的主题句（W4）
+
+- **规则**：每个正文段落的第一句承担主题句职能：给出判断、对象或问题，长度控制在 70 个 CJK 字符以内；不要用「因此/所以/但是/然而/此外/同时/另外/而且/并且」直接开头承担主题。
+- **判定**：段落 ≥ 100 CJK 时检查；首句 > 70 CJK，或以衔接词开头且首句 ≥ 40 CJK → 命中。
+- **依据**：Google Technical Writing One 的 Paragraphs 单元（opening sentence 确立段落中心点）；中文技术文档写作风格指南 3.2（一个段落一个主题，中心句放段首，段落 50–200 字）。
+- **反例**：
+  > 因此，在把工具结果放进请求之前，需要先确认它是否可序列化，还要确认它的大小是否超过上下文预算，最后还要决定哪些字段可以给模型看。
+- **改后**：
+  > 工具结果进上下文前要过三道关：可序列化、不超预算、只暴露该暴露的字段。第一道关决定框架会不会直接报错，后两道关决定模型会不会被噪声带偏。
+- **落地产物**：每个正文段的首句。
+
+### R5 长句要断，禁止「一逗到底」（W5）
+
+- **规则**：单个句子建议 ≤ 120 CJK；超过 120 判 WARN，超过 180 判 ERROR。一个句子出现 ≥ 5 个逗号且 ≥ 100 CJK，视为「一逗到底」。
+- **判定**：按 `。！？；` 切句，只统计 CJK 与中文标点；代码、表格、HTML 注释不计；连续 3 个 ≥90 字的句子额外提示一次。
+- **依据**：中文技术文档写作风格指南 3.3（句子建议 ≤ 100 字，避免复合句与一逗到底）；Google「Short sentences」；Microsoft「Be brief」。
+- **反例**：
+  > 由于框架需要保存同步位点，而位点的官方定义使用 uint32 存储，所以超过 4G 部分的偏移会溢出，进而存下一个错误的位点，重启后又要用这个位点重新解析，最终出现上面的报错。
+- **改后**：
+  > 框架需要保存同步位点，而官方定义用 uint32 存储。超过 4G 的部分会溢出，存下错误的位点。重启后按这个位点重新解析，就会出现上面的报错。
+- **落地产物**：正文所有句子。
+
+### R6 段首指代必须有先行词（W6）
+
+- **规则**：段落不以「这 / 该 / 此 / 其 / 它」直接开头，除非本节标题或上一段最后一句已经给出明确名词。
+- **判定**：仅检查「小节第一段」以这些代词开头、且小节标题不含英文标识符/代码术语的情况；命中后人工确认。
+- **依据**：Google Technical Writing One「Avoid ambiguous pronouns」；Gopen & Swan 的 topic position（段首应回指已知信息）。
+- **反例**：
+  > 它会先剥离开关，再分派实现。
+- **改后**：
+  > `OutputSchema.build()` 先剥离开关，再分派实现。
+- **落地产物**：小节首段与小节标题。
+
+### R7 先例子后术语，或至少同段落地（人工）
+
+- **规则**：抽象概念出现后，同段或下一段必须有一个具体例子（代码片段、输入输出、日志、场景）；原理线连续 3 段没有例子即视为悬空。
+- **依据**：Merrill 的 demonstration 原则；4C/ID 的支持性信息要配真实任务；Bloom 的 understand → apply 顺序。
+- **反例**：连续三段解释「能力槽位」的排序规则，没有任何一次具体的能力组合。
+- **改后**：给出两个能力（一个 `position="outermost"`、一个默认）并排出实际顺序，再解释为什么。
+- **落地产物**：原理线每 3 段至少一个例子。
+
+### R8 具体先于抽象，禁止抽象层级跳跃（人工）
+
+- **规则**：一个段落内只爬一层抽象：要么从现象到判断，要么从判断到机制；不要在同一段里从「业务现象」直接跳到「内部数据结构」。
+- **依据**：Gopen & Swan 的 old-before-new（每句主题位承接上一句的信息）；Sweller 的 intrinsic load 分段处理。
+- **反例**：先写「工单路由失败」，下一句直接写「`CallToolsNode` 的 `ToolCallPart` 没有对应返回」。
+- **改后**：先写「路由失败时，日志里会看到一次没有结果的工具调用」，再写「对应到运行图，就是 `ToolCallPart` 在下一轮请求里没有返回」。
+- **落地产物**：段落之间的过渡句。
+
+### R9 结论放句末，不要埋在句中（人工）
+
+- **规则**：一句话要强调的结论放在句号前；段落要强调的结论放在段末。不要把「所以」放在句中然后继续堆限定。
+- **依据**：Gopen & Swan 的 stress position（句末承载新信息与强调）。
+- **反例**：
+  > 这个顺序，虽然看起来只是实现细节，实际上决定了重试成本由谁承担，因此不能随意调整。
+- **改后**：
+  > 这个顺序不是实现细节：它决定了重试成本由谁承担。所以不能随意调整。
+- **落地产物**：每个论证段的末句。
+
+### R10 跨段要有衔接（人工）
+
+- **规则**：下一段的首句要回指上一段的结论或对象；两段之间不能只靠标题衔接。
+- **依据**：Gopen & Swan 的 topic position；PLOS「Draw clear and explicit links between ideas」。
+- **反例**：上一段讲完「预算归属」，下一段直接开始「超时参数有三个」。
+- **改后**：下一段首句写「预算归属确定后，超时才有分母；超时参数因此分三层」。
+- **落地产物**：相邻段落的首句。
+
+### R11 去掉空转开场（W1）
+
+- **规则**：禁止「本节将介绍 / 本小节主要讨论 / 接下来我们来看 / 众所周知 / 随着……的发展」这类不携带信息的开场。
+- **判定**：小节第一段的前 40 字内匹配上述模式即命中；「下面的脚本/例子用……」属于有效信息，不在此列。
+- **依据**：Microsoft「Get to the point fast」「Be brief」；Google 段落首句应确立中心点。
+- **反例**：
+  > 本节将介绍依赖注入机制。依赖注入是指……
+- **改后**：
+  > 同一个工具函数，测试里要换假模型、生产里要读真实配置。把这些对象写死在函数内部，测试就得改源码。这个框架用依赖注入解决这个问题：调用时把对象传进来，而不是在内部构造。
+- **落地产物**：小节首段。
+
+### R12 中文句法：少名词化、少长定语、补主语（人工）
+
+- **规则**：
+  - 名词化动词改回动词：「对消息历史进行修复」→「修复消息历史」。
+  - 长定语拆成短句：「一个在多次重试后仍然失败并最终抛出统一异常的运行」→「运行重试多次仍失败，最终抛出统一异常」。
+  - 有行动者的句子用主动语态；不要用「被」字句掩盖施事者（中文「被」还常带负面含义）。
+  - 每句尽量有明确主语，避免连续无主句。
+- **依据**：余光中《论中文的常态与变态》（抽象名词软化动词、名词成灾）；中文技术文档写作风格指南 2.3 / 7.2（主动语态、简洁清晰）；Williams 的「characters as subjects, actions as verbs」。
+- **反例**：
+  > 对消息历史的修复由入口节点进行执行，随后完成对请求的组装。
+- **改后**：
+  > 入口节点先修复消息历史，再组装请求。
+- **落地产物**：逐句修订，优先处理「进行/实现/完成 + 名词」结构。
+
+---
+
+## 2. 章首与小节开头的推荐写法
+
+### 2.1 章首（`N.0`）四句骨架
+
+```text
+1. 读者此刻的具体困境：<一个可复现的场景，不出现新术语>
+2. 不解决的代价：<错误在什么时候、以什么形式暴露>
+3. 本章交付什么：<读者读完能做什么/解释什么>
+4. 引入核心概念：<术语> —— <一句白话解释>
+```
+
+要点：第 4 句才允许出现本章的核心术语；如果必须提前出现，就地加白话括注。
+
+### 2.2 小节开头三选一
+
+- **症状式**：先写一个可观察的失败/异常/延迟，再引出本节对象。
+- **对比式**：先写「按直觉会怎么做」，再写「为什么在这里不够」，最后引出机制。
+- **任务式**：先写读者要完成的具体任务，再写完成它需要知道的规则。
+
+三种都要求：**动机句在前，定义句在后**。定义句之后紧跟一个例子或一张表，不要连续两段纯定义。
+
+### 2.3 原理线的特殊要求
+
+原理线不是「定义汇编」。每节至少包含：
+
+1. 一个触发问题（应用线里出现过的现象）；
+2. 一个可判定定义（能用来判断「是不是」）；
+3. 一个近邻对照（和什么容易混淆）；
+4. 一个正例 + 一个反例；
+5. 一条代价/边界（什么时候不该用）。
+
+缺第 1 项时，读者不知道为什么要读；缺第 4 项时，定义无法落地。
+
+---
+
+## 3. 与现有骨架的冲突点（写作时注意）
+
+| 现有骨架位置 | 容易诱发的写法 | 纠正方式 |
+|---|---|---|
+| `N.4 原理：概念锚定` 标题 | 把「概念」当主语，直接罗列定义 | 先写触发问题，再写定义；标题不改，内容顺序按 R2 |
+| 方法论文档 5.2「概念卡」以「一句话定义」开头 | 分析阶段就形成「定义优先」的提纲 | 提纲里把「触发问题」提到「一句话定义」之前 |
+| `N.0` 只写位置与目标 | 章首没有读者困境 | 按 2.1 四句骨架补第 1、2 句 |
+| `N.1` 直接进入场景 | 首个术语先于动机出现 | 场景首段先写「不做会怎样」，术语第二段再出现 |
+
+---
+
+## 4. 机械检查项与阈值（`chapter-lint.mjs`）
+
+| 代码 | 检查 | 判定阈值 | 默认级别 | 豁免 |
+|---|---|---|---|---|
+| `W1` | 空转开场 | 小节首段前 40 字匹配 `本节将/本节主要/本小节/接下来我们/众所周知/随着…发展` | WARN | `<!-- lint-ignore: W1 -->` |
+| `W2` | 概念先行 | 首句含定义式表述（是指/指的是/定义为）且全段无动机线索；或首句引入标题里没有的代码标识符、且无动机线索；H3 首段 ≥60 CJK 才查 | WARN（`--strict` 为 ERROR） | `<!-- lint-ignore: W2 -->` |
+| `W3` | 术语/缩写裸奔 | 加粗术语（标题出现或全章重复，3–10 CJK 字）首次出现，120 字内无白话锚点；缩写（全大写/驼峰）首次出现无全称或白话锚点 | WARN | `<!-- lint-ignore: W3 -->` |
+| `W4` | 主题句弱 | 段落 ≥100 CJK，首句 >70 CJK，或以衔接词开头且首句 ≥40 CJK | WARN | `<!-- lint-ignore: W4 -->` |
+| `W5` | 长句/一逗到底 | 单句 >120 CJK；>180 升 ERROR；≥5 逗号且 ≥100 CJK | WARN / ERROR | `<!-- lint-ignore: W5 -->` |
+| `W6` | 段首指代悬空 | 小节首段以「这/该/此/其/它」开头，标题无英文/代码术语 | WARN | `<!-- lint-ignore: W6 -->` |
+
+补充约定：
+
+- 只检查正文段落；围栏代码、表格、HTML 注释、callout（`<div>` 块）、列表、标题、公式不参与。
+- 小节若先出现列表或表格，则跳过 W1/W2/W6；W2 的标识符分支要求首句 ≥25 CJK，且 H3 首段 <60 CJK 整体豁免，更短的导览句不报。
+- `<!-- lint-ignore: Wx -->` 写在段落前一行，或写在小节标题下方、首段之前；只豁免该段落或该小节，多个代码用逗号分隔。
+- `--no-readability` 可整体关闭 W 系列，用于历史书稿的一次性迁移。
+- 所有 W 项默认 WARN；`--strict` 下 W2 升为 ERROR，W5 的 >180 仍是 ERROR，其余保持 WARN——只有 ERROR 才使退出码为 1。
+
+---
+
+## 5. 文献依据（按用途分组）
+
+### 5.1 技术文档风格指南
+
+- Google, *Technical Writing One*（summary）：定义新术语、一致用词、避免歧义代词、主动语态、一句一个想法、段落首句确立中心点。  
+  <https://developers.google.cn/tech-writing/one/summary>
+- Google, *Technical Writing One — Paragraphs*：好段落首句确立中心；一段一个主题；段落 3–5 句；回答 what/why/how。  
+  <https://developers.google.cn/tech-writing/one/paragraphs>
+- Google, *Developer Documentation Style Guide — Highlights*：主动语态、第二人称、条件前置、短句。  
+  <https://developers.google.cn/style/highlights>
+- Microsoft, *Writing Style Guide — Top 10 tips*：bigger ideas fewer words、write like you speak、get to the point fast、be brief、revise weak writing（避免 there is/are）。  
+  <https://learn.microsoft.com/en-us/style-guide/top-10-tips-style-voice>
+- 中文技术文档写作风格指南（yikeke）：段落一个主题、中心句放段首、段落 50–200 字、句子 ≤100 字、避免一逗到底、优先主动语态。  
+  <https://zh-style-guide.readthedocs.io/zh_CN/latest/>
+
+### 5.2 学术写作与论文结构
+
+- IEEE Author Center, *Structure Your Paper*：Introduction 先给领域现状，再收窄到具体问题，最后说明动机与贡献。  
+  <https://conferences.ieeeauthorcenter.ieee.org/write-your-paper/structure-your-paper/>
+- IEEE Author Center Journals, *Structure Your Article*：Introduction 要说明研究问题及其重要性。  
+  <https://journals.ieeeauthorcenter.ieee.org/create-your-ieee-journal-article/create-the-text-of-your-article/structure-your-article/>
+- PLOS, *How to Edit Your Work*：一句一个新想法；明确画出观点之间的连接；具体直接；写给目标读者。  
+  <https://plos.org/resource/how-to-edit-your-work/>
+
+### 5.3 说明性写作与读者认知
+
+- Gopen & Swan, *The Science of Scientific Writing*（American Scientist, 1990）：topic position、stress position、主谓相邻、旧信息先于新信息；违反读者预期会把认知资源从内容转移到结构。  
+  <https://cseweb.ucsd.edu/~swanson/papers/science-of-writing.pdf>
+- 对 Gopen & Swan 四条的整理与证据边界（含「不应把原则当硬规则」的提醒）：  
+  <https://seandavi.github.io/scriptorium/concepts/knowledge/scientific-writing/reader-expectation-approach/>
+- Joseph Williams, *Style: Lessons in Clarity and Grace*：主语命名角色、动词命名动作；避免名词化；已知信息放句首，新信息放句末。  
+  <https://musicsocialexperience.voices.wooster.edu/wp-content/uploads/sites/211/2019/02/Williams-and-Bizup-Style-Lesson-2.pdf>
+- Sweller 认知负荷理论（内在/外在/相关负荷）：未解释的新术语属于可避免的外在负荷。  
+  <https://education.nsw.gov.au/content/dam/main-education/about-us/educational-data/cese/2017-cognitive-load-theory.pdf>
+- Mayer 多媒体学习十二原则：coherence（去冗余）、signaling（给结构线索）、segmenting（分段）、pre-training（先教构件名称与特征）。  
+  <https://www.nyu.edu/content/dam/nyu/facultyResources/documents/ESMITS/12PrinciplesofMultimedia.pdf>
+
+### 5.4 教材与教学写作
+
+- Merrill, *First Principles of Instruction*：problem-centered、activation、demonstration、application、integration。  
+  <https://www.reigeluth.net/_files/ugd/4d4aa4_cb31166a411947c8bdec98c7af2f8a2c.pdf>
+- van Merriënboer, *4C/ID: Overview of Main Design Principles*：学习任务、支持性信息、程序性信息、部分任务练习；支持性信息服务于非重复性任务。  
+  <https://www.4cid.org/wp-content/uploads/2021/04/vanmerrienboer-4cid-overview-of-main-design-principles-2021.pdf>
+- Bloom 修订版认知层级（remember → understand → apply → analyze → evaluate → create）：解释性文本应先建立理解，再进入应用与分析。  
+  <https://teaching.uic.edu/cate-teaching-guides/syllabus-course-design/blooms-taxonomy-of-educational-objectives/>
+
+### 5.5 中文技术写作的特殊问题
+
+- 余光中《论中文的常态与变态》（西化中文）：抽象名词软化动词、名词成灾、长定语堆叠。  
+  <http://language.chinadaily.com.cn/a/201509/01/WS5b20a851a31001b825720b30_2.html>
+- 中文技术文档写作风格指南 2.3 简洁清晰 / 7.2 语法：主动语态、避免长句与复合句。  
+  <https://zh-style-guide.readthedocs.io/zh_CN/latest/>
+
+---
+
+## 6. 每条依据改的是哪一步、留下什么产物
+
+| 依据 | 改哪一步 | 可检查的产物 |
+|---|---|---|
+| Gopen & Swan（topic / stress / 主谓相邻 / 旧新） | 句子与段落的排序 | 段首主题句（W4）、段首指代（W6）、结论落段末（人工 R9） |
+| Williams（角色作主语、动作作动词） | 逐句修订 | 名词化与被动句清单（人工 R12） |
+| Google / Microsoft / 中文风格指南 | 小节开场、句长、段落长度 | W1 空转开场、W5 长句、W4 段落主题句 |
+| Sweller / Mayer | 信息投放顺序 | 定义前的动机段（W2）、术语白话锚点（W3）、例子密度（人工 R7） |
+| Merrill / 4C/ID / Bloom | 原理线的教学顺序 | 触发问题 → 定义 → 例子 → 边界（R2 / R7 / 2.3） |
+| IEEE / PLOS | 章首与跨段衔接 | 章首四句骨架（R1）、段间回指（人工 R10） |
+| 余光中 / 中文风格指南 | 中文句法 | 去名词化、拆长定语、补主语（R12） |
+
+---
+
+## 7. 使用顺序（写作时）
+
+1. 写 `N.0`：先写困境与代价，最后才写概念名。
+2. 写每个 H2/H3：先写 2–3 句动机，再写定义；定义后 1 段内给例子。
+3. 写每段：第一句先给判断，末尾放结论。
+4. 全文过一遍：删空转开场，拆 >120 字长句，去「进行/实现/完成 + 名词」，补主语。
+5. 跑 `node scripts/chapter-lint.mjs --root=<book>`，按 W1–W6 修；误报用 `<!-- lint-ignore: Wx -->` 标注并写明理由。

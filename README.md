@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.skills.sh/samonysh/cookbook-forge"><img src="https://skills.sh/b/samonysh/cookbook-forge" alt="skills.sh"></a>
-  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.5.2"><img src="https://img.shields.io/badge/version-1.5.2-blue" alt="version"></a>
+  <a href="https://github.com/samonysh/cookbook-forge/releases/tag/v1.7.0"><img src="https://img.shields.io/badge/version-1.7.0-blue" alt="version"></a>
   <a href="https://github.com/samonysh/cookbook-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
 </p>
 
@@ -221,8 +221,8 @@ npx skills add samonysh/cookbook-forge
 打包发布：
 
 ```bash
-node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.5.2.zip
-skillhub publish ./cookbook-forge --changelog "v1.5.2: 轨道归属按内容性质判定（机制/判断/成本→原理线，映射/误判→综合段）"
+node scripts/build-skill.mjs          # 生成 dist/cookbook-forge-1.7.0.zip
+skillhub publish ./cookbook-forge --changelog "v1.7.0: 可读性检查扩到缩写，W2 严格模式升 ERROR，长句阈值放宽至 120/180"
 ```
 
 ## License
